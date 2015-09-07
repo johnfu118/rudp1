@@ -32,6 +32,7 @@ test_tcp_tmr(void)
 static void
 tcp_setup(void)
 {
+  printf("start==============================\n");
   /* reset iss to default (6510) */
   tcp_ticks = 0;
   tcp_ticks = 0 - (tcp_next_iss() - 6510);
@@ -45,6 +46,7 @@ tcp_setup(void)
 static void
 tcp_teardown(void)
 {
+  printf("end==============================\n");
   tcp_remove_all();
 //  netif_list = NULL;
 //  netif_default = NULL;
@@ -82,7 +84,7 @@ START_TEST(test_tcp_recv_inseq)
   u16_t data_len;
   u16_t remote_port = 0x100, local_port = 0x101;
 //  struct netif netif;
-  struct test_tcp_txcounters txcounters;
+//  struct test_tcp_txcounters txcounters;
   LWIP_UNUSED_ARG(_i);
 
   /* initialize local vars */
@@ -108,7 +110,7 @@ START_TEST(test_tcp_recv_inseq)
   if (p != NULL) {
     /* pass the segment to tcp_input */
     tcp_input(p);
-//    test_tcp_input(p, &netif);
+//    tcp_input(p);
     /* check if counters are as expected */
     EXPECT(counters.close_calls == 0);
     EXPECT(counters.recv_calls == 1);
@@ -123,13 +125,12 @@ START_TEST(test_tcp_recv_inseq)
 }
 END_TEST
 
-#if 0
+extern struct test_tcp_txcounters txcounters;
 /** Provoke fast retransmission by duplicate ACKs and then recover by ACKing all sent data.
  * At the end, send more data. */
 START_TEST(test_tcp_fast_retx_recover)
 {
-  struct netif netif;
-  struct test_tcp_txcounters txcounters;
+//  struct test_tcp_txcounters txcounters;
   struct test_tcp_counters counters;
   struct tcp_pcb* pcb;
   struct pbuf* p;
@@ -145,10 +146,11 @@ START_TEST(test_tcp_fast_retx_recover)
   LWIP_UNUSED_ARG(_i);
 
   /* initialize local vars */
-  IP_ADDR4(&local_ip,  192, 168,   1, 1);
-  IP_ADDR4(&remote_ip, 192, 168,   1, 2);
-  IP_ADDR4(&netmask,   255, 255, 255, 0);
-  test_tcp_init_netif(&netif, &txcounters, &local_ip, &netmask);
+//  IP_ADDR4(&local_ip,  192, 168,   1, 1);
+//  IP_ADDR4(&remote_ip, 192, 168,   1, 2);
+//  IP_ADDR4(&netmask,   255, 255, 255, 0);
+//  test_tcp_init_netif(&netif, &txcounters, &local_ip, &netmask);
+  ip_output_if_init();
   memset(&counters, 0, sizeof(counters));
 
   /* create and initialize the pcb */
@@ -165,12 +167,12 @@ START_TEST(test_tcp_fast_retx_recover)
   err = tcp_output(pcb);
   EXPECT_RET(err == ERR_OK);
   EXPECT_RET(txcounters.num_tx_calls == 1);
-  EXPECT_RET(txcounters.num_tx_bytes == sizeof(data1) + sizeof(struct tcp_hdr) + sizeof(struct ip_hdr));
+  EXPECT_RET(txcounters.num_tx_bytes == sizeof(data1) + sizeof(struct tcp_hdr)/* + sizeof(struct ip_hdr)*/);
   memset(&txcounters, 0, sizeof(txcounters));
  /* "recv" ACK for data1 */
   p = tcp_create_rx_segment(pcb, NULL, 0, 0, 4, TCP_ACK);
   EXPECT_RET(p != NULL);
-  test_tcp_input(p, &netif);
+  tcp_input(p);
   EXPECT_RET(txcounters.num_tx_calls == 0);
   EXPECT_RET(pcb->unacked == NULL);
   /* send data2 */
@@ -179,12 +181,12 @@ START_TEST(test_tcp_fast_retx_recover)
   err = tcp_output(pcb);
   EXPECT_RET(err == ERR_OK);
   EXPECT_RET(txcounters.num_tx_calls == 1);
-  EXPECT_RET(txcounters.num_tx_bytes == sizeof(data2) + sizeof(struct tcp_hdr) + sizeof(struct ip_hdr));
+  EXPECT_RET(txcounters.num_tx_bytes == sizeof(data2) + sizeof(struct tcp_hdr));
   memset(&txcounters, 0, sizeof(txcounters));
   /* duplicate ACK for data1 (data2 is lost) */
   p = tcp_create_rx_segment(pcb, NULL, 0, 0, 0, TCP_ACK);
   EXPECT_RET(p != NULL);
-  test_tcp_input(p, &netif);
+  tcp_input(p);
   EXPECT_RET(txcounters.num_tx_calls == 0);
   EXPECT_RET(pcb->dupacks == 1);
   /* send data3 */
@@ -199,7 +201,7 @@ START_TEST(test_tcp_fast_retx_recover)
   /* 2nd duplicate ACK for data1 (data2 and data3 are lost) */
   p = tcp_create_rx_segment(pcb, NULL, 0, 0, 0, TCP_ACK);
   EXPECT_RET(p != NULL);
-  test_tcp_input(p, &netif);
+  tcp_input(p);
   EXPECT_RET(txcounters.num_tx_calls == 0);
   EXPECT_RET(pcb->dupacks == 2);
   /* queue data4, don't send it (unsent-oversize is != 0) */
@@ -208,7 +210,7 @@ START_TEST(test_tcp_fast_retx_recover)
   /* 3nd duplicate ACK for data1 (data2 and data3 are lost) -> fast retransmission */
   p = tcp_create_rx_segment(pcb, NULL, 0, 0, 0, TCP_ACK);
   EXPECT_RET(p != NULL);
-  test_tcp_input(p, &netif);
+  tcp_input(p);
   /*EXPECT_RET(txcounters.num_tx_calls == 1);*/
   EXPECT_RET(pcb->dupacks == 3);
   memset(&txcounters, 0, sizeof(txcounters));
@@ -261,7 +263,7 @@ START_TEST(test_tcp_fast_retx_recover)
   /* send ACKs for data2 and data3 */
   p = tcp_create_rx_segment(pcb, NULL, 0, 0, 12, TCP_ACK);
   EXPECT_RET(p != NULL);
-  test_tcp_input(p, &netif);
+  tcp_input(p);
   /*EXPECT_RET(txcounters.num_tx_calls == 0);*/
 
   /* ...and even more data */
@@ -281,7 +283,7 @@ START_TEST(test_tcp_fast_retx_recover)
   EXPECT_RET(p != NULL);
   if (p != NULL) {
     /* pass the segment to tcp_input */
-    test_tcp_input(p, &netif);
+    tcp_input(p);
     /* check if counters are as expected */
     EXPECT_RET(counters.close_calls == 0);
     EXPECT_RET(counters.recv_calls == 1);
@@ -296,6 +298,7 @@ START_TEST(test_tcp_fast_retx_recover)
 }
 END_TEST
 
+#if 0
 static u8_t tx_data[TCP_WND*2];
 
 static void
@@ -374,7 +377,7 @@ START_TEST(test_tcp_fast_rexmit_wraparound)
 
   /* ACK the first segment */
   p = tcp_create_rx_segment(pcb, NULL, 0, 0, TCP_MSS, TCP_ACK);
-  test_tcp_input(p, &netif);
+  tcp_input(p);
   /* ensure this didn't trigger a retransmission */
   EXPECT(txcounters.num_tx_calls == 1);
   EXPECT(txcounters.num_tx_bytes == TCP_MSS + 40U);
@@ -385,16 +388,16 @@ START_TEST(test_tcp_fast_rexmit_wraparound)
   /* 3 dupacks */
   EXPECT(pcb->dupacks == 0);
   p = tcp_create_rx_segment(pcb, NULL, 0, 0, 0, TCP_ACK);
-  test_tcp_input(p, &netif);
+  tcp_input(p);
   EXPECT(txcounters.num_tx_calls == 0);
   EXPECT(pcb->dupacks == 1);
   p = tcp_create_rx_segment(pcb, NULL, 0, 0, 0, TCP_ACK);
-  test_tcp_input(p, &netif);
+  tcp_input(p);
   EXPECT(txcounters.num_tx_calls == 0);
   EXPECT(pcb->dupacks == 2);
   /* 3rd dupack -> fast rexmit */
   p = tcp_create_rx_segment(pcb, NULL, 0, 0, 0, TCP_ACK);
-  test_tcp_input(p, &netif);
+  tcp_input(p);
   EXPECT(pcb->dupacks == 3);
   EXPECT(txcounters.num_tx_calls == 4);
   memset(&txcounters, 0, sizeof(txcounters));
@@ -568,7 +571,7 @@ static void test_tcp_tx_full_window_lost(u8_t zero_window_probe_from_unsent)
 
   /* now ACK the packet before the first */
   p = tcp_create_rx_segment(pcb, NULL, 0, 0, 0, TCP_ACK);
-  test_tcp_input(p, &netif);
+  tcp_input(p);
   /* ensure this didn't trigger a retransmission */
   EXPECT(txcounters.num_tx_calls == 0);
   EXPECT(txcounters.num_tx_bytes == 0);
@@ -588,7 +591,7 @@ static void test_tcp_tx_full_window_lost(u8_t zero_window_probe_from_unsent)
   if (zero_window_probe_from_unsent) {
     /* ACK all data but close the TX window */
     p = tcp_create_rx_segment_wnd(pcb, NULL, 0, 0, TCP_WND, TCP_ACK, 0);
-    test_tcp_input(p, &netif);
+    tcp_input(p);
     /* ensure this didn't trigger any transmission */
     EXPECT(txcounters.num_tx_calls == 0);
     EXPECT(txcounters.num_tx_bytes == 0);
@@ -664,7 +667,8 @@ tcp_suite(void)
   testfunc tests[] = {
     TESTFUNC(test_tcp_new_abort),
     TESTFUNC(test_tcp_recv_inseq),
-/*    TESTFUNC(test_tcp_fast_retx_recover),
+    TESTFUNC(test_tcp_fast_retx_recover),
+    /*
     TESTFUNC(test_tcp_fast_rexmit_wraparound),
     TESTFUNC(test_tcp_rto_rexmit_wraparound),
     TESTFUNC(test_tcp_tx_full_window_lost_from_unacked),

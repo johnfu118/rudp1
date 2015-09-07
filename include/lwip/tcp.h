@@ -38,11 +38,12 @@
 
 #include "lwip/mem.h"
 #include "lwip/pbuf.h"
-#include "lwip/ip.h"
-#include "lwip/icmp.h"
+//#include "lwip/ip.h"
+//#include "lwip/icmp.h"
 #include "lwip/err.h"
-#include "lwip/ip6.h"
-#include "lwip/ip6_addr.h"
+//#include "lwip/ip6.h"
+//#include "lwip/ip6_addr.h"
+#include "lwip/ip_addr.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -181,6 +182,43 @@ enum tcp_state {
   /* ports are in host byte order */ \
   u16_t local_port
 
+#if LWIP_NETIF_HWADDRHINT
+#define IP_PCB_ADDRHINT ;u8_t addr_hint
+#else
+#define IP_PCB_ADDRHINT
+#endif /* LWIP_NETIF_HWADDRHINT */
+
+#if LWIP_IPV6 && LWIP_IPV4
+#define IP_PCB_ISIPV6_MEMBER          u8_t isipv6;
+#define IP_PCB_IPVER_EQ(pcb1, pcb2)   ((pcb1)->isipv6 == (pcb2)->isipv6)
+#define IP_PCB_IPVER_INPUT_MATCH(pcb) (ip_current_is_v6() ? \
+                                       ((pcb)->isipv6 != 0) : \
+                                       ((pcb)->isipv6 == 0))
+#define PCB_ISIPV6(pcb) ((pcb)->isipv6)
+#else
+#define IP_PCB_ISIPV6_MEMBER
+#define IP_PCB_IPVER_EQ(pcb1, pcb2)   1
+#define IP_PCB_IPVER_INPUT_MATCH(pcb) 1
+#define PCB_ISIPV6(pcb)               LWIP_IPV6
+#endif /* LWIP_IPV6 */
+
+/* This is the common part of all PCB types. It needs to be at the
+   beginning of a PCB type definition. It is located here so that
+   changes to this common part are made in one location instead of
+   having to change all PCB structs. */
+#define IP_PCB \
+  IP_PCB_ISIPV6_MEMBER \
+  /* ip addresses in network byte order */ \
+  ip_addr_t local_ip; \
+  ip_addr_t remote_ip; \
+   /* Socket options */  \
+  u8_t so_options;      \
+   /* Type Of Service */ \
+  u8_t tos;              \
+  /* Time To Live */     \
+  u8_t ttl               \
+  /* link layer address resolution hint */ \
+  IP_PCB_ADDRHINT
 
 /* the TCP protocol control block */
 struct tcp_pcb {

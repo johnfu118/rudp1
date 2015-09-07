@@ -238,6 +238,32 @@ test_tcp_new_counters_pcb(struct test_tcp_counters* counters)
   return pcb;
 }
 
+struct test_tcp_txcounters txcounters;
+void ip_output_if_init()
+{
+    memset(&txcounters, 0, sizeof(struct test_tcp_txcounters));
+}
+
+err_t ip_output_if(struct pbuf *p)
+{
+  txcounters.num_tx_calls++;
+  txcounters.num_tx_bytes += p->tot_len;
+  if (txcounters.copy_tx_packets) {
+      struct pbuf *p_copy = pbuf_alloc(PBUF_LINK, p->tot_len, PBUF_RAM);
+      err_t err;
+      EXPECT(p_copy != NULL);
+      err = pbuf_copy(p_copy, p);
+      EXPECT(err == ERR_OK);
+      if (txcounters.tx_packets == NULL) {
+          txcounters.tx_packets = p_copy;
+      } else {
+          pbuf_cat(txcounters.tx_packets, p_copy);
+      }
+  }
+
+  return ERR_OK;
+}
+
 #if 0
 /** Calls tcp_input() after adjusting current_iphdr_dest */
 void test_tcp_input(struct pbuf *p, struct netif *inp)

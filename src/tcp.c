@@ -47,14 +47,14 @@
 #include "lwip/def.h"
 #include "lwip/mem.h"
 #include "lwip/memp.h"
-#include "lwip/snmp.h"
+//#include "lwip/snmp.h"
 #include "lwip/tcp.h"
 #include "lwip/tcp_impl.h"
 #include "lwip/debug.h"
 #include "lwip/stats.h"
-#include "lwip/ip6.h"
-#include "lwip/ip6_addr.h"
-#include "lwip/nd6.h"
+//#include "lwip/ip6.h"
+//#include "lwip/ip6_addr.h"
+//#include "lwip/nd6.h"
 
 #include <string.h>
 
@@ -182,8 +182,7 @@ tcp_close_shutdown(struct tcp_pcb *pcb, u8_t rst_on_unacked_data)
 
       /* don't call tcp_abort here: we must not deallocate the pcb since
          that might not be expected when calling tcp_close */
-      tcp_rst(pcb->snd_nxt, pcb->rcv_nxt, &pcb->local_ip, &pcb->remote_ip,
-               pcb->local_port, pcb->remote_port);
+      tcp_rst(pcb->snd_nxt, pcb->rcv_nxt, pcb->local_port, pcb->remote_port);
 
       tcp_pcb_purge(pcb);
       TCP_RMV_ACTIVE(pcb);
@@ -231,26 +230,22 @@ tcp_close_shutdown(struct tcp_pcb *pcb, u8_t rst_on_unacked_data)
     TCP_PCB_REMOVE_ACTIVE(pcb);
     memp_free(MEMP_TCP_PCB, pcb);
     pcb = NULL;
-    snmp_inc_tcpattemptfails();
     break;
   case SYN_RCVD:
     err = tcp_send_fin(pcb);
     if (err == ERR_OK) {
-      snmp_inc_tcpattemptfails();
       pcb->state = FIN_WAIT_1;
     }
     break;
   case ESTABLISHED:
     err = tcp_send_fin(pcb);
     if (err == ERR_OK) {
-      snmp_inc_tcpestabresets();
       pcb->state = FIN_WAIT_1;
     }
     break;
   case CLOSE_WAIT:
     err = tcp_send_fin(pcb);
     if (err == ERR_OK) {
-      snmp_inc_tcpestabresets();
       pcb->state = LAST_ACK;
     }
     break;
@@ -406,7 +401,7 @@ tcp_abandon(struct tcp_pcb *pcb, int reset)
 #endif /* TCP_QUEUE_OOSEQ */
     if (send_rst) {
       LWIP_DEBUGF(TCP_RST_DEBUG, ("tcp_abandon: sending RST\n"));
-      tcp_rst(seqno, ackno, &pcb->local_ip, &pcb->remote_ip, local_port, pcb->remote_port);
+      tcp_rst(seqno, ackno, local_port, pcb->remote_port);
     }
     memp_free(MEMP_TCP_PCB, pcb);
     TCP_EVENT_ERR(errf, errf_arg, ERR_ABRT);
@@ -429,6 +424,7 @@ tcp_abort(struct tcp_pcb *pcb)
   tcp_abandon(pcb, 1);
 }
 
+#if 0
 /**
  * Binds the connection to a local port number and IP address. If the
  * IP address is not given (i.e., ipaddr == NULL), the IP address of
@@ -506,6 +502,8 @@ tcp_bind(struct tcp_pcb *pcb, const ip_addr_t *ipaddr, u16_t port)
   LWIP_DEBUGF(TCP_DEBUG, ("tcp_bind: bind to port %"U16_F"\n", port));
   return ERR_OK;
 }
+#endif
+
 #if LWIP_CALLBACK_API
 /**
  * Default accept callback if no accept callback is specified by the user.
@@ -776,17 +774,18 @@ tcp_connect(struct tcp_pcb *pcb, const ip_addr_t *ipaddr, u16_t port,
 
   /* check if we have a route to the remote host */
   if (ip_addr_isany(&pcb->local_ip)) {
-    /* no local IP address set, yet. */
-    struct netif *netif;
-    ip_addr_t *local_ip;
-    ip_route_get_local_ip(PCB_ISIPV6(pcb), &pcb->local_ip, &pcb->remote_ip, netif, local_ip, &local_ip_tmp);
-    if ((netif == NULL) || (local_ip == NULL)) {
-      /* Don't even try to send a SYN packet if we have no route
-         since that will fail. */
+//    /* no local IP address set, yet. */
+//    struct netif *netif;
+//    ip_addr_t *local_ip;
+//    ip_route_get_local_ip(PCB_ISIPV6(pcb), &pcb->local_ip, &pcb->remote_ip, netif, local_ip, &local_ip_tmp);
+//    if ((netif == NULL) || (local_ip == NULL)) {
+//      /* Don't even try to send a SYN packet if we have no route
+//         since that will fail. */
+//      return ERR_RTE;
+//    }
+//    /* Use the address as local address of the pcb. */
+//    ip_addr_copy(pcb->local_ip, *local_ip);
       return ERR_RTE;
-    }
-    /* Use the address as local address of the pcb. */
-    ip_addr_copy(pcb->local_ip, *local_ip);
   }
 
   old_local_port = pcb->local_port;
@@ -850,7 +849,6 @@ tcp_connect(struct tcp_pcb *pcb, const ip_addr_t *ipaddr, u16_t port,
       TCP_RMV(&tcp_bound_pcbs, pcb);
     }
     TCP_REG_ACTIVE(pcb);
-    snmp_inc_tcpactiveopens();
 
     tcp_output(pcb);
   }
@@ -976,6 +974,9 @@ tcp_slowtmr_start:
     }
 
     /* Check if KEEPALIVE should be sent */
+#define SOF_KEEPALIVE     0x08U  /* keep connections alive */
+/** Gets an IP pcb option (SOF_* flags) */
+#define ip_get_option(pcb, opt)   ((pcb)->so_options & (opt))
     if(ip_get_option(pcb, SOF_KEEPALIVE) &&
        ((pcb->state == ESTABLISHED) ||
         (pcb->state == CLOSE_WAIT))) {
@@ -1046,8 +1047,7 @@ tcp_slowtmr_start:
       }
 
       if (pcb_reset) {
-        tcp_rst(pcb->snd_nxt, pcb->rcv_nxt, &pcb->local_ip, &pcb->remote_ip,
-                 pcb->local_port, pcb->remote_port);
+        tcp_rst(pcb->snd_nxt, pcb->rcv_nxt, pcb->local_port, pcb->remote_port);
       }
 
       err_fn = pcb->errf;

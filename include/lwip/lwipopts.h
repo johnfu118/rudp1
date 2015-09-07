@@ -83,4 +83,13 @@
 /* Minimal changes to opt.h required for etharp unit tests: */
 #define ETHARP_SUPPORT_STATIC_ENTRIES   1
 
+
+#define MEM_LIBC_MALLOC 1
+
+// johnfu: kill
+#define TCP_CALCULATE_EFF_SEND_MSS 0
+#define CHECKSUM_CHECK_TCP 0
+#define CHECKSUM_GEN_TCP 0
+#define NO_SYS_NO_TIMERS 1
+
 #endif /* __LWIPOPTS_H__ */

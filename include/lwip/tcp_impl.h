@@ -39,11 +39,11 @@
 #include "lwip/tcp.h"
 #include "lwip/mem.h"
 #include "lwip/pbuf.h"
-#include "lwip/ip.h"
-#include "lwip/icmp.h"
+//#include "lwip/ip.h"
+//#include "lwip/icmp.h"
 #include "lwip/err.h"
-#include "lwip/ip6.h"
-#include "lwip/ip6_addr.h"
+//#include "lwip/ip6.h"
+//#include "lwip/ip6_addr.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -68,7 +68,7 @@ void             tcp_fasttmr (void);
 void             tcp_txnow   (void);
 
 /* Only used by IP to pass a TCP segment to TCP: */
-void             tcp_input   (struct pbuf *p, struct netif *inp);
+void             tcp_input   (struct pbuf *p);
 /* Used within the TCP code only: */
 struct tcp_pcb * tcp_alloc   (u8_t prio);
 void             tcp_abandon (struct tcp_pcb *pcb, int reset);
@@ -483,7 +483,6 @@ err_t tcp_enqueue_flags(struct tcp_pcb *pcb, u8_t flags);
 void tcp_rexmit_seg(struct tcp_pcb *pcb, struct tcp_seg *seg);
 
 void tcp_rst(u32_t seqno, u32_t ackno,
-       const ip_addr_t *local_ip, const ip_addr_t *remote_ip,
        u16_t local_port, u16_t remote_port);
 
 u32_t tcp_next_iss(void);

@@ -40,7 +40,9 @@
 #define BIG_ENDIAN 4321
 #endif
 
-#include "arch/cc.h"
+#include "cc.h"
+
+#include <arpa/inet.h>
 
 /** Temporary: define format string for size_t if not defined in cc.h */
 #ifndef SZT_F

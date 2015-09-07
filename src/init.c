@@ -44,23 +44,7 @@
 #include "lwip/mem.h"
 #include "lwip/memp.h"
 #include "lwip/pbuf.h"
-#include "lwip/netif.h"
-#include "lwip/sockets.h"
-#include "lwip/ip.h"
-#include "lwip/raw.h"
-#include "lwip/udp.h"
 #include "lwip/tcp_impl.h"
-#include "lwip/snmp_msg.h"
-#include "lwip/autoip.h"
-#include "lwip/igmp.h"
-#include "lwip/dns.h"
-#include "lwip/timers.h"
-#include "netif/etharp.h"
-#include "lwip/ip6.h"
-#include "lwip/nd6.h"
-#include "lwip/mld6.h"
-#include "lwip/api.h"
-#include "netif/ppp/ppp_impl.h"
 
 /* Compile-time sanity checks for configuration errors.
  * These can be done independently of LWIP_DEBUG, without penalty.
@@ -327,37 +311,9 @@ lwip_init(void)
   mem_init();
   memp_init();
   pbuf_init();
-  netif_init();
-#if LWIP_IPV4
-  ip_init();
-#if LWIP_ARP
-  etharp_init();
-#endif /* LWIP_ARP */
-#endif /* LWIP_IPV4 */
-#if LWIP_RAW
-  raw_init();
-#endif /* LWIP_RAW */
-#if LWIP_UDP
-  udp_init();
-#endif /* LWIP_UDP */
 #if LWIP_TCP
   tcp_init();
 #endif /* LWIP_TCP */
-#if LWIP_SNMP
-  snmp_init();
-#endif /* LWIP_SNMP */
-#if LWIP_AUTOIP
-  autoip_init();
-#endif /* LWIP_AUTOIP */
-#if LWIP_IGMP
-  igmp_init();
-#endif /* LWIP_IGMP */
-#if LWIP_DNS
-  dns_init();
-#endif /* LWIP_DNS */
-#if PPP_SUPPORT
-  ppp_init();
-#endif
 
 #if LWIP_TIMERS
   sys_timeouts_init();

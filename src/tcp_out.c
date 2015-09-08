@@ -1371,6 +1371,12 @@ tcp_rexmit_fast(struct tcp_pcb *pcb)
       pcb->ssthresh = 2*pcb->mss;
     }
     
+    /**
+     * Retransmit the lost segment and set cwnd to ssthresh plus 3*SMSS.
+       This artificially "inflates" the congestion window by the number
+       of segments (three) that have left the network and which the
+       receiver has buffered. -RFC2581 TCP Congestion Control
+     */
     pcb->cwnd = pcb->ssthresh + 3 * pcb->mss;
     pcb->flags |= TF_INFR;
   } 

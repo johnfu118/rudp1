@@ -298,7 +298,6 @@ START_TEST(test_tcp_fast_retx_recover)
 }
 END_TEST
 
-#if 0
 static u8_t tx_data[TCP_WND*2];
 
 static void
@@ -318,8 +317,8 @@ check_seqnos(struct tcp_seg *segs, int num_expected, u32_t *seqnos_expected)
  * segment lists are still properly sorted. */
 START_TEST(test_tcp_fast_rexmit_wraparound)
 {
-  struct netif netif;
-  struct test_tcp_txcounters txcounters;
+//  struct netif netif;
+//  struct test_tcp_txcounters txcounters;
   struct test_tcp_counters counters;
   struct tcp_pcb* pcb;
   struct pbuf* p;
@@ -343,10 +342,13 @@ START_TEST(test_tcp_fast_rexmit_wraparound)
   }
 
   /* initialize local vars */
+/*
   IP_ADDR4(&local_ip,  192, 168,   1, 1);
   IP_ADDR4(&remote_ip, 192, 168,   1, 2);
   IP_ADDR4(&netmask,   255, 255, 255, 0);
   test_tcp_init_netif(&netif, &txcounters, &local_ip, &netmask);
+*/
+  ip_output_if_init();
   memset(&counters, 0, sizeof(counters));
 
   /* create and initialize the pcb */
@@ -369,7 +371,7 @@ START_TEST(test_tcp_fast_rexmit_wraparound)
   EXPECT(pcb->unacked == NULL);
   err = tcp_output(pcb);
   EXPECT(txcounters.num_tx_calls == 2);
-  EXPECT(txcounters.num_tx_bytes == 2 * (TCP_MSS + 40U));
+  EXPECT(txcounters.num_tx_bytes == 2 * (TCP_MSS + sizeof(struct tcp_hdr)));
   memset(&txcounters, 0, sizeof(txcounters));
 
   check_seqnos(pcb->unacked, 2, seqnos);
@@ -380,7 +382,7 @@ START_TEST(test_tcp_fast_rexmit_wraparound)
   tcp_input(p);
   /* ensure this didn't trigger a retransmission */
   EXPECT(txcounters.num_tx_calls == 1);
-  EXPECT(txcounters.num_tx_bytes == TCP_MSS + 40U);
+  EXPECT(txcounters.num_tx_bytes == TCP_MSS + sizeof(struct tcp_hdr));
   memset(&txcounters, 0, sizeof(txcounters));
   check_seqnos(pcb->unacked, 2, &seqnos[1]);
   check_seqnos(pcb->unsent, 3, &seqnos[3]);
@@ -399,6 +401,11 @@ START_TEST(test_tcp_fast_rexmit_wraparound)
   p = tcp_create_rx_segment(pcb, NULL, 0, 0, 0, TCP_ACK);
   tcp_input(p);
   EXPECT(pcb->dupacks == 3);
+  /**
+   * fast retransmit +1
+   * wnd inflate then send more +3
+   * so == 4
+   */
   EXPECT(txcounters.num_tx_calls == 4);
   memset(&txcounters, 0, sizeof(txcounters));
   EXPECT(pcb->unsent == NULL);
@@ -416,8 +423,8 @@ END_TEST
  * segment lists are still properly sorted. */
 START_TEST(test_tcp_rto_rexmit_wraparound)
 {
-  struct netif netif;
-  struct test_tcp_txcounters txcounters;
+//  struct netif netif;
+//  struct test_tcp_txcounters txcounters;
   struct test_tcp_counters counters;
   struct tcp_pcb* pcb;
   ip_addr_t remote_ip, local_ip, netmask;
@@ -440,10 +447,13 @@ START_TEST(test_tcp_rto_rexmit_wraparound)
   }
 
   /* initialize local vars */
+/*
   IP_ADDR4(&local_ip,  192, 168,   1, 1);
   IP_ADDR4(&remote_ip, 192, 168,   1, 2);
   IP_ADDR4(&netmask,   255, 255, 255, 0);
   test_tcp_init_netif(&netif, &txcounters, &local_ip, &netmask);
+*/
+  ip_output_if_init();
   memset(&counters, 0, sizeof(counters));
 
   /* create and initialize the pcb */
@@ -468,7 +478,7 @@ START_TEST(test_tcp_rto_rexmit_wraparound)
   EXPECT(pcb->unacked == NULL);
   err = tcp_output(pcb);
   EXPECT(txcounters.num_tx_calls == 2);
-  EXPECT(txcounters.num_tx_bytes == 2 * (TCP_MSS + 40U));
+  EXPECT(txcounters.num_tx_bytes == 2 * (TCP_MSS + sizeof(struct tcp_hdr)));
   memset(&txcounters, 0, sizeof(txcounters));
 
   check_seqnos(pcb->unacked, 2, seqnos);
@@ -505,8 +515,8 @@ END_TEST
  * At the end, send more data. */
 static void test_tcp_tx_full_window_lost(u8_t zero_window_probe_from_unsent)
 {
-  struct netif netif;
-  struct test_tcp_txcounters txcounters;
+//  struct netif netif;
+//  struct test_tcp_txcounters txcounters;
   struct test_tcp_counters counters;
   struct tcp_pcb* pcb;
   struct pbuf *p;
@@ -530,10 +540,12 @@ static void test_tcp_tx_full_window_lost(u8_t zero_window_probe_from_unsent)
   }
 
   /* initialize local vars */
+/*
   IP_ADDR4(&local_ip,  192, 168,   1, 1);
   IP_ADDR4(&remote_ip, 192, 168,   1, 2);
   IP_ADDR4(&netmask,   255, 255, 255, 0);
   test_tcp_init_netif(&netif, &txcounters, &local_ip, &netmask);
+*/
   memset(&counters, 0, sizeof(counters));
   memset(&txcounters, 0, sizeof(txcounters));
 
@@ -554,7 +566,7 @@ static void test_tcp_tx_full_window_lost(u8_t zero_window_probe_from_unsent)
     err = tcp_output(pcb);
     EXPECT_RET(err == ERR_OK);
     EXPECT(txcounters.num_tx_calls == 1);
-    EXPECT(txcounters.num_tx_bytes == initial_data_len + 40U);
+    EXPECT(txcounters.num_tx_bytes == initial_data_len + sizeof(struct tcp_hdr));
     memset(&txcounters, 0, sizeof(txcounters));
     sent_total += initial_data_len;
   }
@@ -564,7 +576,7 @@ static void test_tcp_tx_full_window_lost(u8_t zero_window_probe_from_unsent)
     err = tcp_output(pcb);
     EXPECT_RET(err == ERR_OK);
     EXPECT(txcounters.num_tx_calls == 1);
-    EXPECT(txcounters.num_tx_bytes == TCP_MSS + 40U);
+    EXPECT(txcounters.num_tx_bytes == TCP_MSS + sizeof(struct tcp_hdr));
     memset(&txcounters, 0, sizeof(txcounters));
   }
   EXPECT(sent_total == (TCP_WND - TCP_MSS));
@@ -584,7 +596,7 @@ static void test_tcp_tx_full_window_lost(u8_t zero_window_probe_from_unsent)
   err = tcp_output(pcb);
   EXPECT_RET(err == ERR_OK);
   EXPECT(txcounters.num_tx_calls == 1);
-  EXPECT(txcounters.num_tx_bytes == TCP_MSS + 40U);
+  EXPECT(txcounters.num_tx_bytes == TCP_MSS + sizeof(struct tcp_hdr));
   memset(&txcounters, 0, sizeof(txcounters));
   EXPECT(pcb->persist_backoff == 0);
 
@@ -624,12 +636,12 @@ static void test_tcp_tx_full_window_lost(u8_t zero_window_probe_from_unsent)
     test_tcp_tmr();
     txcounters.copy_tx_packets = 0;
     EXPECT(txcounters.num_tx_calls == 1);
-    EXPECT(txcounters.num_tx_bytes == 1 + 40U);
+    EXPECT(txcounters.num_tx_bytes == 1 + sizeof(struct tcp_hdr));
     EXPECT(txcounters.tx_packets != NULL);
     if (txcounters.tx_packets != NULL) {
       u8_t sent;
       u16_t ret;
-      ret = pbuf_copy_partial(txcounters.tx_packets, &sent, 1, 40U);
+      ret = pbuf_copy_partial(txcounters.tx_packets, &sent, 1, sizeof(struct tcp_hdr));
       EXPECT(ret == 1);
       EXPECT(sent == expected);
     }
@@ -658,7 +670,6 @@ START_TEST(test_tcp_tx_full_window_lost_from_unacked)
   test_tcp_tx_full_window_lost(0);
 }
 END_TEST
-#endif
 
 /** Create the suite including all tests for this module */
 Suite *
@@ -668,11 +679,10 @@ tcp_suite(void)
     TESTFUNC(test_tcp_new_abort),
     TESTFUNC(test_tcp_recv_inseq),
     TESTFUNC(test_tcp_fast_retx_recover),
-    /*
     TESTFUNC(test_tcp_fast_rexmit_wraparound),
     TESTFUNC(test_tcp_rto_rexmit_wraparound),
     TESTFUNC(test_tcp_tx_full_window_lost_from_unacked),
-    TESTFUNC(test_tcp_tx_full_window_lost_from_unsent)*/
+    TESTFUNC(test_tcp_tx_full_window_lost_from_unsent)
   };
   return create_suite("TCP", tests, sizeof(tests)/sizeof(testfunc), tcp_setup, tcp_teardown);
 }

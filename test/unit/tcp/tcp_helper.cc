@@ -1,5 +1,7 @@
 #include "tcp_helper.h"
 
+#include <gtest/gtest.h>
+
 #include "lwip/tcp_impl.h"
 #include "lwip/stats.h"
 #include "lwip/pbuf.h"
@@ -9,6 +11,16 @@
 #if !LWIP_STATS || !TCP_STATS || !MEMP_STATS
 #error "This tests needs TCP- and MEMP-statistics enabled"
 #endif
+
+void ip_output_if_real(struct pbuf *p);
+extern "C"
+{
+err_t ip_output_if(struct pbuf *p)
+{
+    ip_output_if_real(p);
+    return ERR_OK;
+}
+}
 
 /** Remove all pcbs on the given list. */
 static void
@@ -31,17 +43,17 @@ tcp_remove_all(void)
   tcp_remove(tcp_listen_pcbs.pcbs);
   tcp_remove(tcp_active_pcbs);
   tcp_remove(tcp_tw_pcbs);
-  fail_unless(lwip_stats.memp[MEMP_TCP_PCB].used == 0);
-  fail_unless(lwip_stats.memp[MEMP_TCP_PCB_LISTEN].used == 0);
-  fail_unless(lwip_stats.memp[MEMP_TCP_SEG].used == 0);
-  fail_unless(lwip_stats.memp[MEMP_PBUF_POOL].used == 0);
+  EXPECT_EQ(lwip_stats.memp[MEMP_TCP_PCB].used , 0);
+  EXPECT_EQ(lwip_stats.memp[MEMP_TCP_PCB_LISTEN].used , 0);
+  EXPECT_EQ(lwip_stats.memp[MEMP_TCP_SEG].used , 0);
+  EXPECT_EQ(lwip_stats.memp[MEMP_PBUF_POOL].used , 0);
 }
 
 /** Create a TCP segment usable for passing to tcp_input */
-static struct pbuf*
+static void
 tcp_create_segment_wnd(ip_addr_t* src_ip, ip_addr_t* dst_ip,
                    u16_t src_port, u16_t dst_port, void* data, size_t data_len,
-                   u32_t seqno, u32_t ackno, u8_t headerflags, u16_t wnd)
+                   u32_t seqno, u32_t ackno, u8_t headerflags, u16_t wnd, struct pbuf** buf)
 {
   struct pbuf *p, *q;
 //  struct ip_hdr* iphdr;
@@ -50,12 +62,12 @@ tcp_create_segment_wnd(ip_addr_t* src_ip, ip_addr_t* dst_ip,
   LWIP_ASSERT("data_len too big", data_len <= 0xFFFF);
 
   p = pbuf_alloc(PBUF_TRANSPORT, pbuf_len, PBUF_POOL);
-  EXPECT_RETNULL(p != NULL);
+  ASSERT_TRUE(p != NULL);
   /* first pbuf must be big enough to hold the headers */
-  EXPECT_RETNULL(p->len >= (/*sizeof(struct ip_hdr) + */sizeof(struct tcp_hdr)));
+  ASSERT_GE(p->len, (/*sizeof(struct ip_hdr) + */sizeof(struct tcp_hdr)));
   if (data_len > 0) {
     /* first pbuf must be big enough to hold at least 1 data byte, too */
-    EXPECT_RETNULL(p->len > (/*sizeof(struct ip_hdr) + */sizeof(struct tcp_hdr)));
+      ASSERT_GT(p->len , (/*sizeof(struct ip_hdr) + */sizeof(struct tcp_hdr)));
   }
 
   for(q = p; q != NULL; q = q->next) {
@@ -76,7 +88,7 @@ tcp_create_segment_wnd(ip_addr_t* src_ip, ip_addr_t* dst_ip,
   pbuf_header(p, -(s16_t)sizeof(struct ip_hdr));
 */
 
-  tcphdr = p->payload;
+  tcphdr = static_cast<tcp_hdr*>(p->payload);
   tcphdr->src   = htons(src_port);
   tcphdr->dest  = htons(dst_port);
   tcphdr->seqno = htonl(seqno);
@@ -101,29 +113,29 @@ tcp_create_segment_wnd(ip_addr_t* src_ip, ip_addr_t* dst_ip,
 
 //  pbuf_header(p, sizeof(struct ip_hdr));
 
-  return p;
+  *buf = p;
 }
 
 /** Create a TCP segment usable for passing to tcp_input */
-struct pbuf*
+void
 tcp_create_segment(ip_addr_t* src_ip, ip_addr_t* dst_ip,
                    u16_t src_port, u16_t dst_port, void* data, size_t data_len,
-                   u32_t seqno, u32_t ackno, u8_t headerflags)
+                   u32_t seqno, u32_t ackno, u8_t headerflags, struct pbuf** buf)
 {
   return tcp_create_segment_wnd(src_ip, dst_ip, src_port, dst_port, data,
-    data_len, seqno, ackno, headerflags, TCP_WND);
+    data_len, seqno, ackno, headerflags, TCP_WND, buf);
 }
 
 /** Create a TCP segment usable for passing to tcp_input
  * - IP-addresses, ports, seqno and ackno are taken from pcb
  * - seqno and ackno can be altered with an offset
  */
-struct pbuf*
+void
 tcp_create_rx_segment(struct tcp_pcb* pcb, void* data, size_t data_len, u32_t seqno_offset,
-                      u32_t ackno_offset, u8_t headerflags)
+                      u32_t ackno_offset, u8_t headerflags, struct pbuf** buf)
 {
   return tcp_create_segment(&pcb->remote_ip, &pcb->local_ip, pcb->remote_port, pcb->local_port,
-    data, data_len, pcb->rcv_nxt + seqno_offset, pcb->lastack + ackno_offset, headerflags);
+    data, data_len, pcb->rcv_nxt + seqno_offset, pcb->lastack + ackno_offset, headerflags, buf);
 }
 
 /** Create a TCP segment usable for passing to tcp_input
@@ -131,11 +143,11 @@ tcp_create_rx_segment(struct tcp_pcb* pcb, void* data, size_t data_len, u32_t se
  * - seqno and ackno can be altered with an offset
  * - TCP window can be adjusted
  */
-struct pbuf* tcp_create_rx_segment_wnd(struct tcp_pcb* pcb, void* data, size_t data_len,
-                   u32_t seqno_offset, u32_t ackno_offset, u8_t headerflags, u16_t wnd)
+void tcp_create_rx_segment_wnd(struct tcp_pcb* pcb, void* data, size_t data_len,
+                   u32_t seqno_offset, u32_t ackno_offset, u8_t headerflags, u16_t wnd, struct pbuf** buf)
 {
   return tcp_create_segment_wnd(&pcb->remote_ip, &pcb->local_ip, pcb->remote_port, pcb->local_port,
-    data, data_len, pcb->rcv_nxt + seqno_offset, pcb->lastack + ackno_offset, headerflags, wnd);
+    data, data_len, pcb->rcv_nxt + seqno_offset, pcb->lastack + ackno_offset, headerflags, wnd, buf);
 }
 
 /** Safely bring a tcp_pcb into the requested state */
@@ -163,15 +175,15 @@ tcp_set_state(struct tcp_pcb* pcb, enum tcp_state state, ip_addr_t* local_ip,
     pcb->remote_ip.addr = remote_ip->addr;
     pcb->remote_port = remote_port;
   } else {
-    fail();
+      ASSERT_TRUE(0);
   }
 }
 
 void
 test_tcp_counters_err(void* arg, err_t err)
 {
-  struct test_tcp_counters* counters = arg;
-  EXPECT_RET(arg != NULL);
+  struct test_tcp_counters* counters = (test_tcp_counters*)arg;
+  ASSERT_TRUE(arg != NULL);
   counters->err_calls++;
   counters->last_err = err;
 }
@@ -185,25 +197,25 @@ test_tcp_counters_check_rxdata(struct test_tcp_counters* counters, struct pbuf* 
     /* no data to compare */
     return;
   }
-  EXPECT_RET(counters->recved_bytes + p->tot_len <= counters->expected_data_len);
+  EXPECT_LE(counters->recved_bytes + p->tot_len , counters->expected_data_len);
   received = counters->recved_bytes;
   for(q = p; q != NULL; q = q->next) {
-    char *data = q->payload;
+    char *data = (char*)q->payload;
     for(i = 0; i < q->len; i++) {
-      EXPECT_RET(data[i] == counters->expected_data[received]);
+        EXPECT_EQ(data[i] , counters->expected_data[received]);
       received++;
     }
   }
-  EXPECT(received == counters->recved_bytes + p->tot_len);
+  EXPECT_EQ(received , counters->recved_bytes + p->tot_len);
 }
 
-err_t
-test_tcp_counters_recv(void* arg, struct tcp_pcb* pcb, struct pbuf* p, err_t err)
+void
+test_tcp_counters_recv_real(void* arg, struct tcp_pcb* pcb, struct pbuf* p, err_t err)
 {
-  struct test_tcp_counters* counters = arg;
-  EXPECT_RETX(arg != NULL, ERR_OK);
-  EXPECT_RETX(pcb != NULL, ERR_OK);
-  EXPECT_RETX(err == ERR_OK, ERR_OK);
+  struct test_tcp_counters* counters = (test_tcp_counters*)arg;
+  ASSERT_TRUE(arg != NULL);
+  ASSERT_TRUE(pcb != NULL);
+  ASSERT_EQ(err , ERR_OK);
 
   if (p != NULL) {
     if (counters->close_calls == 0) {
@@ -218,8 +230,15 @@ test_tcp_counters_recv(void* arg, struct tcp_pcb* pcb, struct pbuf* p, err_t err
   } else {
     counters->close_calls++;
   }
-  EXPECT(counters->recv_calls_after_close == 0 && counters->recved_bytes_after_close == 0);
-  return ERR_OK;
+  EXPECT_EQ(counters->recv_calls_after_close , 0);
+  EXPECT_EQ(counters->recved_bytes_after_close , 0);
+}
+
+err_t
+test_tcp_counters_recv(void* arg, struct tcp_pcb* pcb, struct pbuf* p, err_t err)
+{
+    test_tcp_counters_recv_real(arg, pcb, p, err);
+    return ERR_OK;
 }
 
 /** Allocate a pcb and set up the test_tcp_counters_* callbacks */
@@ -244,16 +263,16 @@ void ip_output_if_init()
     memset(&txcounters, 0, sizeof(struct test_tcp_txcounters));
 }
 
-err_t ip_output_if(struct pbuf *p)
+void ip_output_if_real(struct pbuf *p)
 {
   txcounters.num_tx_calls++;
   txcounters.num_tx_bytes += p->tot_len;
   if (txcounters.copy_tx_packets) {
       struct pbuf *p_copy = pbuf_alloc(PBUF_LINK, p->tot_len, PBUF_RAM);
       err_t err;
-      EXPECT(p_copy != NULL);
+      ASSERT_TRUE(p_copy != NULL);
       err = pbuf_copy(p_copy, p);
-      EXPECT(err == ERR_OK);
+      ASSERT_EQ(err , ERR_OK);
       if (txcounters.tx_packets == NULL) {
           txcounters.tx_packets = p_copy;
       } else {
@@ -261,8 +280,8 @@ err_t ip_output_if(struct pbuf *p)
       }
   }
 
-  return ERR_OK;
 }
+
 
 #if 0
 /** Calls tcp_input() after adjusting current_iphdr_dest */

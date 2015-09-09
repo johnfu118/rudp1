@@ -4,10 +4,11 @@
  *  Created on: 2015年9月8日
  *      Author: ryanbai
  */
-#include "tcp.h"
-#include "tcp_impl.h"
-#include "memp.h"
-#include "pbuf.h"
+#include "lwip/tcp.h"
+#include "lwip/tcp_impl.h"
+#include "lwip/memp.h"
+#include "lwip/pbuf.h"
+#include "lwip/init.h"
 
 #include <sys/socket.h>
 //#include <netinet/in.h>
@@ -38,12 +39,11 @@ int main(int argc, const char* argv[])
 	svraddr.sin_port = htons(443);
 
 	//初始化
-	tcp_init();
-	pbuf_init();
-	memp_init();
+	lwip_init();
 
 	//
 	struct tcp_pcb *client = tcp_new();
+	client->local_ip.addr = inet_addr("10.12.21.11");
 	ip_addr_t ipaddr;
 	ipaddr.addr = svraddr.sin_addr.s_addr;
 	tcp_connect(client, &ipaddr, 443, connected);
@@ -72,7 +72,7 @@ int main(int argc, const char* argv[])
 				mybuf = mybuf->next;
 			}
 
-			tcp_input(rembuf, NULL);
+			tcp_input(rembuf);
 		}
 
 		tcp_tmr();
@@ -87,8 +87,7 @@ void tcp_timer_needed(void)
 }
 
 
-err_t ip_output(struct pbuf *p, struct ip_addr *src, u16_t src_port,
-		struct ip_addr *dest, u16_t dest_port, u8_t ttl, u8_t tos, u8_t proto)
+err_t ip_output_if(struct pbuf *p)
 {
 	return sendto(fd, p->payload, p->len, 0, (struct sockaddr *)&svraddr, sizeof(svraddr));
 }

@@ -424,7 +424,6 @@ tcp_abort(struct tcp_pcb *pcb)
   tcp_abandon(pcb, 1);
 }
 
-#if 0
 /**
  * Binds the connection to a local port number and IP address. If the
  * IP address is not given (i.e., ipaddr == NULL), the IP address of
@@ -442,10 +441,6 @@ tcp_abort(struct tcp_pcb *pcb)
 err_t
 tcp_bind(struct tcp_pcb *pcb, const ip_addr_t *ipaddr, u16_t port)
 {
-  int i;
-  int max_pcb_list = NUM_TCP_PCB_LISTS;
-  struct tcp_pcb *cpcb;
-
   if ((pcb == NULL) || !IP_ADDR_PCB_VERSION_MATCH(pcb, ipaddr)) {
     return ERR_VAL;
   }
@@ -470,6 +465,11 @@ tcp_bind(struct tcp_pcb *pcb, const ip_addr_t *ipaddr, u16_t port)
     }
   }
 
+#if 0
+  int i;
+  int max_pcb_list = NUM_TCP_PCB_LISTS;
+  struct tcp_pcb *cpcb;
+
   /* Check if the address already is in use (on all lists) */
   for (i = 0; i < max_pcb_list; i++) {
     for(cpcb = *tcp_pcb_lists[i]; cpcb != NULL; cpcb = cpcb->next) {
@@ -493,6 +493,7 @@ tcp_bind(struct tcp_pcb *pcb, const ip_addr_t *ipaddr, u16_t port)
       }
     }
   }
+#endif
 
   if (!ip_addr_isany(ipaddr)) {
     ip_addr_set(&pcb->local_ip, ipaddr);
@@ -502,7 +503,6 @@ tcp_bind(struct tcp_pcb *pcb, const ip_addr_t *ipaddr, u16_t port)
   LWIP_DEBUGF(TCP_DEBUG, ("tcp_bind: bind to port %"U16_F"\n", port));
   return ERR_OK;
 }
-#endif
 
 #if LWIP_CALLBACK_API
 /**

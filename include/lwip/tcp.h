@@ -171,8 +171,13 @@ enum tcp_state {
 
 /**
  * members common to struct tcp_pcb and struct tcp_listen_pcb
- */
+ * move ip addr from IP_PCB to TCP_PCB_COMMON
+ * modified by ryan. 2015-9-15
+*/
 #define TCP_PCB_COMMON(type) \
+  /* ip addresses in network byte order */ \
+  ip_addr_t local_ip; \
+  ip_addr_t remote_ip; \
   type *next; /* for the linked list */ \
   void *callback_arg; \
   /* the accept callback for listen- and normal pcbs, if LWIP_CALLBACK_API */ \
@@ -181,12 +186,6 @@ enum tcp_state {
   u8_t prio; \
   /* ports are in host byte order */ \
   u16_t local_port
-
-#if LWIP_NETIF_HWADDRHINT
-#define IP_PCB_ADDRHINT ;u8_t addr_hint
-#else
-#define IP_PCB_ADDRHINT
-#endif /* LWIP_NETIF_HWADDRHINT */
 
 #if LWIP_IPV6 && LWIP_IPV4
 #define IP_PCB_ISIPV6_MEMBER          u8_t isipv6;
@@ -202,28 +201,8 @@ enum tcp_state {
 #define PCB_ISIPV6(pcb)               LWIP_IPV6
 #endif /* LWIP_IPV6 */
 
-/* This is the common part of all PCB types. It needs to be at the
-   beginning of a PCB type definition. It is located here so that
-   changes to this common part are made in one location instead of
-   having to change all PCB structs. */
-#define IP_PCB \
-  IP_PCB_ISIPV6_MEMBER \
-  /* ip addresses in network byte order */ \
-  ip_addr_t local_ip; \
-  ip_addr_t remote_ip; \
-   /* Socket options */  \
-  u8_t so_options;      \
-   /* Type Of Service */ \
-  u8_t tos;              \
-  /* Time To Live */     \
-  u8_t ttl               \
-  /* link layer address resolution hint */ \
-  IP_PCB_ADDRHINT
-
 /* the TCP protocol control block */
 struct tcp_pcb {
-/** common PCB members */
-  IP_PCB;
 /** protocol specific PCB members */
   TCP_PCB_COMMON(struct tcp_pcb);
 
@@ -346,8 +325,6 @@ struct tcp_pcb {
 };
 
 struct tcp_pcb_listen {
-/* Common members of all PCB types */
-  IP_PCB;
 /* Protocol specific PCB members */
   TCP_PCB_COMMON(struct tcp_pcb_listen);
 

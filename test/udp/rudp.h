@@ -27,6 +27,7 @@ typedef err_t (*rudp_connected_fn)(rudp_fd_ptr fd, err_t err);
 
 struct rudp_state
 {
+    // for tcp_close may fail, rudp must retry, not app
     u8_t is_closing;
     //  u8_t retries;
     rudp_pcb pcb;

@@ -388,6 +388,8 @@ int rudp_send(rudp_fd_ptr fd, const void* buf, size_t len)
 
 err_t ip_output_if(struct pbuf *p)
 {
+    // TODO, how to deal with block? platform dependency!!
+    // if ever blocked, tcp_txnow when recover
     int ret = sendto(udp_fd, p->payload, p->len, 0, (struct sockaddr *)&remaddr, sizeof(remaddr));
     if (ret > 0)
         return ERR_OK;

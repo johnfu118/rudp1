@@ -4,63 +4,66 @@
  *  Created on: 2015年9月7日
  *      Author: ryanbai
  */
-#include "lwip/tcp.h"
-#include "lwip/tcp_impl.h"
-#include "lwip/memp.h"
-#include "lwip/pbuf.h"
 
-#include <assert.h>
-#include <errno.h>
-#include <sys/socket.h>
-//#include <netinet/in.h>
-#include <netinet/ip.h> /* superset of previous */
-#include <arpa/inet.h>
-#include <stdio.h>
-#include <string.h>
+#include <stddef.h>
 
-#include "echo.h"
+#include "rudp.h"
 
-#include "common.h"
+err_t echo_accept(rudp_fd_ptr fd, err_t err);
+err_t echo_recv(rudp_fd_ptr tpcb, const void* buf, size_t len, err_t err);
 
-int
-init_udp_svr()
+int main(int argc, const char* argv[])
 {
-    int fd = init_udp();
-    if (fd < 0)
-        return -1;
+    int ret = rudp_init();
+    if (ret != 0)
+        return 1;
 
-    struct sockaddr_in myaddr;      /* our address */
-    /* bind the socket to any valid IP address and a specific port */
-    memset((char *)&myaddr, 0, sizeof(myaddr));
-    myaddr.sin_family = AF_INET;
-    myaddr.sin_addr.s_addr = inet_addr("10.12.21.11");
-    myaddr.sin_port = htons(448);
+    rudp_fd_ptr fd = rudp_socket();
+    if (fd == NULL)
+    {
+        printf("get fd failed\n");
+        return 1;
+    }
 
-    if (bind(fd, (struct sockaddr *)&myaddr, sizeof(myaddr)) < 0) {
-        perror("bind failed");
-        return -1;
+    ret = rudp_bind(fd, "0.0.0.0", 10001);
+    if (ret != 0)
+        return 1;
+
+    ret = rudp_listen(fd, echo_accept, echo_recv);
+    if (ret != 0)
+        return 1;
+
+    /* now loop, receiving data and printing what we received */
+    for (;;) {
+        rudp_update();
     }
 
     return 0;
 }
 
-int main(int argc, const char* argv[])
+err_t echo_accept(rudp_fd_ptr fd, err_t err)
 {
-    int ret = init_udp_svr();
-    if (ret != 0)
-        return 1;
+    printf("accepted\n");
+    return 0;
+}
 
-    //
-    init_tcp_stack();
+err_t echo_recv(rudp_fd_ptr fd, const void* buf, size_t len, err_t err)
+{
+    printf("echo_recv\n");
+    if (buf != NULL && len != 0)
+    {
+        printf("recv: %zu\n", len);
+        printf("content: %s\n", (char*)buf);
 
-    echo_init();
-
-    /* now loop, receiving data and printing what we received */
-    for (;;) {
-        update();
+        // echo back
+        return rudp_send(fd, buf, len);
+    }
+    else
+    {
+        printf("remote closed\n");
     }
 
-    return 0;
+    return err;
 }
 
 

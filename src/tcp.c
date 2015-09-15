@@ -569,9 +569,6 @@ tcp_listen_with_backlog(struct tcp_pcb *pcb, u8_t backlog)
   lpcb->local_port = pcb->local_port;
   lpcb->state = LISTEN;
   lpcb->prio = pcb->prio;
-  lpcb->so_options = pcb->so_options;
-  lpcb->ttl = pcb->ttl;
-  lpcb->tos = pcb->tos;
 #if LWIP_IPV4 && LWIP_IPV6
   PCB_ISIPV6(lpcb) = PCB_ISIPV6(pcb);
   lpcb->accept_any_ip_version = 0;
@@ -974,12 +971,12 @@ tcp_slowtmr_start:
     }
 
     /* Check if KEEPALIVE should be sent */
-#define SOF_KEEPALIVE     0x08U  /* keep connections alive */
-/** Gets an IP pcb option (SOF_* flags) */
-#define ip_get_option(pcb, opt)   ((pcb)->so_options & (opt))
-    if(ip_get_option(pcb, SOF_KEEPALIVE) &&
-       ((pcb->state == ESTABLISHED) ||
-        (pcb->state == CLOSE_WAIT))) {
+    /*
+     * checked by so_options of ip layer, del it. so it always keeplive.
+     * modified by ryan. 2015-9-15
+     */
+    if ((pcb->state == ESTABLISHED) ||
+        (pcb->state == CLOSE_WAIT)) {
       if((u32_t)(tcp_ticks - pcb->tmr) >
          (pcb->keep_idle + TCP_KEEP_DUR(pcb)) / TCP_SLOW_INTERVAL)
       {
@@ -1491,8 +1488,6 @@ tcp_alloc(u8_t prio)
     pcb->snd_scale = 0;
     pcb->rcv_scale = 0;
 #endif
-    pcb->tos = 0;
-    pcb->ttl = TCP_TTL;
     /* As initial send MSS, we use TCP_MSS but limit it to 536.
        The send MSS is updated when an MSS option is received. */
     pcb->mss = (TCP_MSS > 536) ? 536 : TCP_MSS;

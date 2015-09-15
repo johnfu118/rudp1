@@ -43,7 +43,7 @@
 #include "lwip/err.h"
 //#include "lwip/ip6.h"
 //#include "lwip/ip6_addr.h"
-#include "lwip/ip_addr.h"
+//#include "lwip/ip_addr.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -176,8 +176,8 @@ enum tcp_state {
 */
 #define TCP_PCB_COMMON(type) \
   /* ip addresses in network byte order */ \
-  ip_addr_t local_ip; \
-  ip_addr_t remote_ip; \
+  /*ip_addr_t local_ip;*/ \
+  /*ip_addr_t remote_ip;*/ \
   type *next; /* for the linked list */ \
   void *callback_arg; \
   /* the accept callback for listen- and normal pcbs, if LWIP_CALLBACK_API */ \
@@ -383,9 +383,9 @@ void             tcp_err     (struct tcp_pcb *pcb, tcp_err_fn err);
 #endif /* TCP_LISTEN_BACKLOG */
 
 void             tcp_recved  (struct tcp_pcb *pcb, u16_t len);
-err_t            tcp_bind    (struct tcp_pcb *pcb, const ip_addr_t *ipaddr,
+err_t            tcp_bind    (struct tcp_pcb *pcb, /*const ip_addr_t *ipaddr,*/
                               u16_t port);
-err_t            tcp_connect (struct tcp_pcb *pcb, const ip_addr_t *ipaddr,
+err_t            tcp_connect (struct tcp_pcb *pcb, /*const ip_addr_t *ipaddr,*/
                               u16_t port, tcp_connected_fn connected);
 
 struct tcp_pcb * tcp_listen_with_backlog(struct tcp_pcb *pcb, u8_t backlog);

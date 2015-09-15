@@ -195,9 +195,7 @@ int rudp_bind(rudp_fd_ptr fd, const char *ipaddr, u16_t port)
         return ret;
     }
 
-    ip_addr_t ip;
-    ip.addr = s_addr;
-    err_t err = tcp_bind(fd->pcb, &ip, port);
+    err_t err = tcp_bind(fd->pcb, port);
     if (err != ERR_OK)
     {
         /* abort? output diagnostic? */
@@ -319,9 +317,7 @@ err_t on_recv(void *arg, rudp_pcb tpcb, struct pbuf *p, err_t err)
 
 int rudp_connect(rudp_fd_ptr fd, const char* ipaddr, u16_t port, rudp_connected_fn connected_cb, rudp_recv_fn recv_cb)
 {
-    ip_addr_t s_addr;
-    s_addr.addr = inet_addr(ipaddr);
-    fd->pcb->local_ip.addr = s_addr.addr;
+//    fd->pcb->local_ip.addr = s_addr.addr;
 
     fd->connected_cb = connected_cb;
     fd->recv_cb = recv_cb;
@@ -329,10 +325,10 @@ int rudp_connect(rudp_fd_ptr fd, const char* ipaddr, u16_t port, rudp_connected_
     // set udp svr addr
     memset((char *)&remaddr, 0, sizeof(remaddr));
     remaddr.sin_family = AF_INET;
-    remaddr.sin_addr.s_addr = s_addr.addr;
+    remaddr.sin_addr.s_addr = inet_addr(ipaddr);
     remaddr.sin_port = htons(port);
 
-    return tcp_connect(fd->pcb, &s_addr, port, on_connect);
+    return tcp_connect(fd->pcb, port, on_connect);
 }
 
 err_t on_connect(void *arg, rudp_pcb tpcb, err_t err)

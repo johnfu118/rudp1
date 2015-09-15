@@ -54,17 +54,10 @@ extern "C" {
    (TCP vs. UDP, IPv4 vs. IPv6: UDP/IPv4 packets may waste up to 28 bytes) */
 
 #define PBUF_TRANSPORT_HLEN 20
-#if LWIP_IPV6
-#define PBUF_IP_HLEN        40
-#else
-#define PBUF_IP_HLEN        20
-#endif
 
 typedef enum {
   PBUF_TRANSPORT,
   PBUF_IP,
-  PBUF_LINK,
-  PBUF_RAW_TX,
   PBUF_RAW
 } pbuf_layer;
 

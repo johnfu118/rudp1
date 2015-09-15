@@ -267,6 +267,8 @@
 #endif /* LWIP_NETCONN */
 #endif /* !LWIP_DISABLE_MEMP_SANITY_CHECKS */
 
+#if 0
+
 /* TCP sanity checks */
 #if !LWIP_DISABLE_TCP_SANITY_CHECKS
 #if LWIP_TCP
@@ -296,6 +298,8 @@
 #endif
 #endif /* LWIP_TCP */
 #endif /* !LWIP_DISABLE_TCP_SANITY_CHECKS */
+
+#endif
 
 /**
  * Initialize all modules.

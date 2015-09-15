@@ -431,17 +431,15 @@ tcp_abort(struct tcp_pcb *pcb)
  *
  * @param pcb the tcp_pcb to bind (no check is done whether this pcb is
  *        already bound!)
- * @param ipaddr the local ip address to bind to (use IP_ADDR_ANY to bind
- *        to any local address
  * @param port the local port to bind to
  * @return ERR_USE if the port is already in use
  *         ERR_VAL if bind failed because the PCB is not in a valid state
  *         ERR_OK if bound
  */
 err_t
-tcp_bind(struct tcp_pcb *pcb, const ip_addr_t *ipaddr, u16_t port)
+tcp_bind(struct tcp_pcb *pcb, u16_t port)
 {
-  if ((pcb == NULL) || !IP_ADDR_PCB_VERSION_MATCH(pcb, ipaddr)) {
+  if (pcb == NULL) {
     return ERR_VAL;
   }
 
@@ -495,9 +493,9 @@ tcp_bind(struct tcp_pcb *pcb, const ip_addr_t *ipaddr, u16_t port)
   }
 #endif
 
-  if (!ip_addr_isany(ipaddr)) {
-    ip_addr_set(&pcb->local_ip, ipaddr);
-  }
+//  if (!ip_addr_isany(ipaddr)) {
+//    ip_addr_set(&pcb->local_ip, ipaddr);
+//  }
   pcb->local_port = port;
   TCP_REG(&tcp_bound_pcbs, pcb);
   LWIP_DEBUGF(TCP_DEBUG, ("tcp_bind: bind to port %"U16_F"\n", port));
@@ -573,7 +571,7 @@ tcp_listen_with_backlog(struct tcp_pcb *pcb, u8_t backlog)
   PCB_ISIPV6(lpcb) = PCB_ISIPV6(pcb);
   lpcb->accept_any_ip_version = 0;
 #endif /* LWIP_IPV4 && LWIP_IPV6 */
-  ip_addr_copy(lpcb->local_ip, pcb->local_ip);
+//  ip_addr_copy(lpcb->local_ip, pcb->local_ip);
   if (pcb->local_port != 0) {
     TCP_RMV(&tcp_bound_pcbs, pcb);
   }
@@ -745,7 +743,7 @@ again:
  *         other err_t values if connect request couldn't be sent
  */
 err_t
-tcp_connect(struct tcp_pcb *pcb, const ip_addr_t *ipaddr, u16_t port,
+tcp_connect(struct tcp_pcb *pcb, u16_t port,
       tcp_connected_fn connected)
 {
   err_t ret;
@@ -755,22 +753,22 @@ tcp_connect(struct tcp_pcb *pcb, const ip_addr_t *ipaddr, u16_t port,
   ip_addr_t local_ip_tmp;
 #endif /* LWIP_IPV4 && LWIP_IPV6 */
 
-  if ((pcb == NULL) || !IP_ADDR_PCB_VERSION_MATCH(pcb, ipaddr)) {
+  if (pcb == NULL) {
     return ERR_VAL;
   }
 
   LWIP_ERROR("tcp_connect: can only connect from state CLOSED", pcb->state == CLOSED, return ERR_ISCONN);
 
   LWIP_DEBUGF(TCP_DEBUG, ("tcp_connect to port %"U16_F"\n", port));
-  if (ipaddr != NULL) {
-    ip_addr_set(&pcb->remote_ip, ipaddr);
-  } else {
-    return ERR_VAL;
-  }
+//  if (ipaddr != NULL) {
+//    ip_addr_set(&pcb->remote_ip, ipaddr);
+//  } else {
+//    return ERR_VAL;
+//  }
   pcb->remote_port = port;
 
   /* check if we have a route to the remote host */
-  if (ip_addr_isany(&pcb->local_ip)) {
+//  if (ip_addr_isany(&pcb->local_ip)) {
 //    /* no local IP address set, yet. */
 //    struct netif *netif;
 //    ip_addr_t *local_ip;
@@ -782,8 +780,8 @@ tcp_connect(struct tcp_pcb *pcb, const ip_addr_t *ipaddr, u16_t port,
 //    }
 //    /* Use the address as local address of the pcb. */
 //    ip_addr_copy(pcb->local_ip, *local_ip);
-      return ERR_RTE;
-  }
+//      return ERR_RTE;
+//  }
 
   old_local_port = pcb->local_port;
   if (pcb->local_port == 0) {
@@ -981,7 +979,7 @@ tcp_slowtmr_start:
          (pcb->keep_idle + TCP_KEEP_DUR(pcb)) / TCP_SLOW_INTERVAL)
       {
         LWIP_DEBUGF(TCP_DEBUG, ("tcp_slowtmr: KEEPALIVE timeout. Aborting connection to "));
-        ip_addr_debug_print(TCP_DEBUG, &pcb->remote_ip);
+//        ip_addr_debug_print(TCP_DEBUG, &pcb->remote_ip);
         LWIP_DEBUGF(TCP_DEBUG, ("\n"));
         
         ++pcb_remove;

@@ -47,15 +47,15 @@
 
 #include "lwip/tcp_impl.h"
 #include "lwip/def.h"
-#include "lwip/ip_addr.h"
+//#include "lwip/ip_addr.h"
 //#include "lwip/netif.h"
 #include "lwip/mem.h"
 #include "lwip/memp.h"
-#include "lwip/inet_chksum.h"
+//#include "lwip/inet_chksum.h"
 #include "lwip/stats.h"
 //#include "lwip/ip6.h"
 //#include "lwip/ip6_addr.h"
-#include "lwip/inet_chksum.h"
+//#include "lwip/inet_chksum.h"
 #if LWIP_ND6_TCP_REACHABILITY_HINTS
 //#include "lwip/nd6.h"
 #endif /* LWIP_ND6_TCP_REACHABILITY_HINTS */
@@ -228,46 +228,12 @@ tcp_input(struct pbuf *p)
        are LISTENing for incoming connections. */
     prev = NULL;
     for(lpcb = tcp_listen_pcbs.listen_pcbs; lpcb != NULL; lpcb = lpcb->next) {
+        // TODO: only listen(check) on port?
       if (lpcb->local_port == tcphdr->dest) {
-#if LWIP_IPV4 && LWIP_IPV6
-        if (lpcb->accept_any_ip_version) {
-          /* found an ANY-match */
-#if SO_REUSE
-          lpcb_any = lpcb;
-          lpcb_prev = prev;
-#else /* SO_REUSE */
-          break;
-#endif /* SO_REUSE */
-        } else
-#endif /* LWIP_IPV4 && LWIP_IPV6 */
-        if (IP_PCB_IPVER_INPUT_MATCH(lpcb)) {
-          if (0
-                  // TODO: check what?
-                  /*ip_addr_cmp(&lpcb->local_ip, ip_current_dest_addr())*/
-                  ) {
-            /* found an exact match */
             break;
-          } else if (ip_addr_isany(&lpcb->local_ip)) {
-            /* found an ANY-match */
-#if SO_REUSE
-            lpcb_any = lpcb;
-            lpcb_prev = prev;
-#else /* SO_REUSE */
-            break;
- #endif /* SO_REUSE */
-          }
-        }
       }
       prev = (struct tcp_pcb *)lpcb;
     }
-#if SO_REUSE
-    /* first try specific local IP */
-    if (lpcb == NULL) {
-      /* only pass to ANY if no specific local IP has been found */
-      lpcb = lpcb_any;
-      prev = lpcb_prev;
-    }
-#endif /* SO_REUSE */
     if (lpcb != NULL) {
       /* Move this PCB to the front of the list so that subsequent
          lookups will be faster (we exploit locality in TCP segment

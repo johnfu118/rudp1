@@ -12,7 +12,7 @@
 #include "rudp.h"
 
 err_t connected(rudp_fd_ptr fd, err_t err);
-err_t echo_recv(rudp_fd_ptr fd, const void *p, size_t len, err_t err);
+void echo_recv(rudp_fd_ptr fd, const void *p, size_t len, err_t err);
 
 bool run_flag = true;
 int main(int argc, const char* argv[])
@@ -62,7 +62,7 @@ err_t connected(rudp_fd_ptr fd, err_t err)
     return 0;
 }
 
-err_t
+void
 echo_recv(rudp_fd_ptr fd, const void *p, size_t len, err_t err)
 {
     assert (err == ERR_OK);
@@ -72,15 +72,12 @@ echo_recv(rudp_fd_ptr fd, const void *p, size_t len, err_t err)
     {
         printf("recv %zu\n", len);
         printf("content: %s\n", (char*)p);
-
-        rudp_close(fd);
     }
     else
     {
         printf("remote closed\n");
         // closed
         //      run_flag = false;
+        rudp_close(fd);
     }
-
-    return 0;
 }

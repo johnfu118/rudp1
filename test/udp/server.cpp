@@ -10,7 +10,7 @@
 #include "rudp.h"
 
 err_t echo_accept(rudp_fd_ptr fd, err_t err);
-err_t echo_recv(rudp_fd_ptr tpcb, const void* buf, size_t len, err_t err);
+void echo_recv(rudp_fd_ptr tpcb, const void* buf, size_t len, err_t err);
 
 int main(int argc, const char* argv[])
 {
@@ -47,7 +47,7 @@ err_t echo_accept(rudp_fd_ptr fd, err_t err)
     return 0;
 }
 
-err_t echo_recv(rudp_fd_ptr fd, const void* buf, size_t len, err_t err)
+void echo_recv(rudp_fd_ptr fd, const void* buf, size_t len, err_t err)
 {
     printf("echo_recv\n");
     if (buf != NULL && len != 0)
@@ -56,14 +56,13 @@ err_t echo_recv(rudp_fd_ptr fd, const void* buf, size_t len, err_t err)
         printf("content: %s\n", (char*)buf);
 
         // echo back
-        return rudp_send(fd, buf, len);
+        rudp_send(fd, buf, len);
+
+        rudp_close(fd);
     }
     else
     {
         printf("remote closed\n");
+        rudp_close(fd);
     }
-
-    return err;
 }
-
-

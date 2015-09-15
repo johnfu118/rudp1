@@ -34,14 +34,6 @@ static const unsigned int TIME_INTERVAL = 250000;
 struct timeval timeout;
 static const int max_loop = 1000;
 
-enum echo_states
-{
-  ES_NONE = 0,
-  ES_ACCEPTED,
-  ES_RECEIVED,
-  ES_CLOSING
-};
-
 void
 rudp_error(void *arg, err_t err);
 err_t
@@ -167,8 +159,8 @@ int rudp_update()
 
 void setup_pcb(rudp_fd_ptr fd, rudp_pcb pcb)
 {
-	tcp_arg(pcb, fd);
-	fd->pcb = pcb;
+    tcp_arg(pcb, fd);
+    fd->pcb = pcb;
 
     tcp_recv(fd->pcb, on_recv);
     tcp_err(fd->pcb, rudp_error);
@@ -183,14 +175,14 @@ rudp_fd_ptr rudp_socket()
         return NULL;
 
     rudp_pcb pcb = tcp_new();
-	if (pcb == NULL)
-	{
-	    mem_free(fd);
-	    return NULL;
-	}
-	setup_pcb(fd, pcb);
+    if (pcb == NULL)
+    {
+        mem_free(fd);
+        return NULL;
+    }
+    setup_pcb(fd, pcb);
 
-	return fd;
+    return fd;
 }
 
 int rudp_bind(rudp_fd_ptr fd, const char *ipaddr, u16_t port)
@@ -208,7 +200,7 @@ int rudp_bind(rudp_fd_ptr fd, const char *ipaddr, u16_t port)
     err_t err = tcp_bind(fd->pcb, &ip, port);
     if (err != ERR_OK)
     {
-      /* abort? output diagnostic? */
+        /* abort? output diagnostic? */
         assert(0);
     }
 
@@ -250,94 +242,79 @@ err_t on_accept(void *arg, rudp_pcb newpcb, err_t err)
         return ERR_MEM;
     }
 
-    new_fd->state = ES_ACCEPTED;
-	setup_pcb(new_fd, newpcb);
+    setup_pcb(new_fd, newpcb);
 
-    new_fd->retries = 0;
-//    fd->p = NULL;
+    //    new_fd->retries = 0;
+    //    fd->p = NULL;
     new_fd->recv_cb = listen_fd->recv_cb;
     /* pass newly allocated fd to our callbacks */
-//    ret_err = ERR_OK;
+    //    ret_err = ERR_OK;
 
     return listen_fd->accept_cb(new_fd, err);
 }
 
+/**
+  The callback function will be passed a NULL pbuf to
+  indicate that the remote host has closed the connection. If
+  there are no errors and the callback function is to return
+  ERR_OK, then it must free the pbuf. Otherwise, it must not
+  free the pbuf so that lwIP core code can store it.
+ */
 err_t on_recv(void *arg, rudp_pcb tpcb, struct pbuf *p, err_t err)
 {
-    rudp_fd_ptr fd = (rudp_fd_ptr)arg;
-    err_t ret_err;
-
     printf("on_recv\n");
-    LWIP_ASSERT("arg != NULL",arg != NULL);
+
+    rudp_fd_ptr fd = (rudp_fd_ptr)arg;
+    if (fd == NULL)
+    {
+        if (p == NULL)
+        {
+            printf("FIN_WAIT_2 fin, ignore\n");
+            return ERR_OK;
+        }
+        else
+            assert(0);
+    }
+
+    // same as read() ret 0
+    /* remote host closed connection */
     if (p == NULL)
     {
-        /* remote host closed connection */
         printf("remote close\n");
 
-        fd->state = ES_CLOSING;
+        fd->recv_cb(fd, NULL, 0, err);
 
-        // LAST-ACK
-        // send FIN
-        tcp_close(fd->pcb);
-
-        ret_err = fd->recv_cb(fd, NULL, 0, err);
-
-        rudp_free(fd);
-
-//        ret_err = ERR_OK;
-        return ret_err;
+        return ERR_OK;
     }
-    else if(err != ERR_OK)
+    // data recved
+
+    // for now, err passed in can only be ERR_OK
+    if (err != ERR_OK)
     {
         printf("on_recv err=%d\n", err);
-        ret_err = err;
+        fd->recv_cb(fd, NULL, 0, err);
+
+        // return ERR_OK means cb execute ok
+        // err return is not needed, for up-layer already know
+        return ERR_OK;
     }
-    else if(fd->state == ES_ACCEPTED || fd->state == ES_RECEIVED)
+
+    const int BUFSIZE = 64*1024;
+    char buf[BUFSIZE];
+    int copy_len = 0;
+    while (p != NULL)
     {
-        /* first data chunk in p->payload */
-        if (fd->state == ES_ACCEPTED)
-            fd->state = ES_RECEIVED;
-        /* store reference to incoming pbuf (chain) */
-        //    fd->p = p;
-        //    echo_send(tpcb, fd);
-        const int BUFSIZE = 64*1024;
-        char buf[BUFSIZE];
-        int copy_len = 0;
-        while (p != NULL)
-        {
-            memcpy(buf+copy_len, p->payload, p->len);
-            copy_len += p->len;
-            p = p->next;
-        }
-        printf("recv: %s\n", buf);
-
-        tcp_recved(tpcb, copy_len);
-        ret_err = fd->recv_cb(fd, buf, copy_len, err);
-
-        return ret_err;
-
-        //    ret_err = ERR_OK;
+        memcpy(buf+copy_len, p->payload, p->len);
+        copy_len += p->len;
+        p = p->next;
     }
-    else if(fd->state == ES_CLOSING)
-    {
-        /* odd case, remote side closing twice, trash data */
-        tcp_recved(tpcb, p->tot_len);
-        pbuf_free(p);
-        ret_err = ERR_OK;
-    }
-    else
-    {
-        /* unkown fd->state, trash data  */
-        tcp_recved(tpcb, p->tot_len);
-        pbuf_free(p);
-        ret_err = ERR_OK;
-    }
+    printf("recv: %s\n", buf);
 
-    ret_err = fd->recv_cb(fd, NULL, 0, err);
+    tcp_recved(tpcb, copy_len);
 
-    return ret_err;
+    fd->recv_cb(fd, buf, copy_len, err);
 
-    //    return ERR_OK;
+    return ERR_OK;
 }
 
 int rudp_connect(rudp_fd_ptr fd, const char* ipaddr, u16_t port, rudp_connected_fn connected_cb, rudp_recv_fn recv_cb)
@@ -365,20 +342,48 @@ err_t on_connect(void *arg, rudp_pcb tpcb, err_t err)
     if (ret != 0)
         return ret;
 
-    fd->state = ES_RECEIVED;
-
     return err;
 }
 
+/*
+TCP data is sent by enqueueing the data with a call to
+tcp_write(). When the data is successfully transmitted to the remote
+host, the application will be notified with a call to a specified
+callback function.
+
+- err_t tcp_write(struct tcp_pcb *pcb, const void *dataptr, u16_t len,
+                  u8_t apiflags)
+
+  Enqueues the data pointed to by the argument dataptr. The length of
+  the data is passed as the len parameter. The apiflags can be one or more of:
+  - TCP_WRITE_FLAG_COPY: indicates whether the new memory should be allocated
+    for the data to be copied into. If this flag is not given, no new memory
+    should be allocated and the data should only be referenced by pointer. This
+    also means that the memory behind dataptr must not change until the data is
+    ACKed by the remote host
+  - TCP_WRITE_FLAG_MORE: indicates that more data follows. If this is given,
+    the PSH flag is set in the last segment created by this call to tcp_write.
+    If this flag is given, the PSH flag is not set.
+
+  The tcp_write() function will fail and return ERR_MEM if the length
+  of the data exceeds the current send buffer size or if the length of
+  the queue of outgoing segment is larger than the upper limit defined
+  in lwipopts.h. The number of bytes available in the output queue can
+  be retrieved with the tcp_sndbuf() function.
+
+  The proper way to use this function is to call the function with at
+  most tcp_sndbuf() bytes of data. If the function returns ERR_MEM,
+  the application should wait until some of the currently enqueued
+  data has been successfully received by the other host and try again.
+ */
 int rudp_send(rudp_fd_ptr fd, const void* buf, size_t len)
 {
+    // already call close
+    if (fd->is_closing)
+        return -1;
+
     // 不处理TCP_WRITE_FLAG_MORE的情况，意味着不能一次性发送大于最大缓冲区的包
     return tcp_write(fd->pcb, buf, len, 1);
-}
-
-void rudp_abort(rudp_fd_ptr fd)
-{
-    tcp_abort(fd->pcb);
 }
 
 err_t ip_output_if(struct pbuf *p)
@@ -391,77 +396,122 @@ err_t ip_output_if(struct pbuf *p)
     return ret;
 }
 
+/*
+If a connection is aborted because of an error, the application is
+alerted of this event by the err callback. Errors that might abort a
+connection are when there is a shortage of memory. The callback
+function to be called is set using the tcp_err() function.
+
+- void tcp_err(struct tcp_pcb *pcb, void (* err)(void *arg,
+       err_t err))
+
+  The error callback function does not get the pcb passed to it as a
+  parameter since the pcb may already have been deallocated.
+ */
 void
 rudp_error(void *arg, err_t err)
 {
-  rudp_fd_ptr fd = (rudp_fd_ptr)arg;
+    rudp_fd_ptr fd = (rudp_fd_ptr)arg;
 
-  printf("%p err=%d\n", arg, err);
+    printf("%p err=%d\n", arg, err);
 
-  rudp_free(fd);
+    rudp_free(fd);
 }
 
+/**
+When a connection is idle (i.e., no data is either transmitted or
+received), lwIP will repeatedly poll the application by calling a
+specified callback function. This can be used either as a watchdog
+timer for killing connections that have stayed idle for too long, or
+as a method of waiting for memory to become available. For instance,
+if a call to tcp_write() has failed because memory wasn't available,
+the application may use the polling functionality to call tcp_write()
+again when the connection has been idle for a while.
+
+- void tcp_poll(struct tcp_pcb *pcb,
+                err_t (* poll)(void *arg, struct tcp_pcb *tpcb),
+                u8_t interval)
+
+  Specifies the polling interval and the callback function that should
+  be called to poll the application. The interval is specified in
+  number of TCP coarse grained timer shots, which typically occurs
+  twice a second. An interval of 10 means that the application would
+  be polled every 5 seconds.
+ */
 err_t
 rudp_poll(void *arg, struct tcp_pcb *tpcb)
 {
-  err_t ret_err;
-  rudp_fd_ptr fd = (rudp_fd_ptr)arg;
-  if (fd != NULL)
-  {
-      if(fd->state == ES_CLOSING)
-      {
-          rudp_close(fd);
-      }
-    ret_err = ERR_OK;
-  }
-  else
-  {
-    /* nothing to be done */
-    rudp_abort(fd);
-    ret_err = ERR_ABRT;
-  }
-  return ret_err;
+    rudp_fd_ptr fd = (rudp_fd_ptr)arg;
+    if (fd == NULL)
+        return ERR_OK;
+
+    if (fd->is_closing)
+    {
+        // try again
+        rudp_close(fd);
+    }
+
+    return ERR_OK;
 }
 
+/*
+  Specifies the callback function that should be called when data has
+  successfully been received (i.e., acknowledged) by the remote
+  host. The len argument passed to the callback function gives the
+  amount bytes that was acknowledged by the last acknowledgment.
+ */
 err_t
 rudp_sent(void *arg, struct tcp_pcb *tpcb, u16_t len)
 {
-  rudp_fd_ptr fd = (rudp_fd_ptr)arg;
+    rudp_fd_ptr fd = (rudp_fd_ptr)arg;
+    if (fd == NULL)
+        return ERR_OK;
 
-  fd->retries = 0;
-
-//  if(fd->p != NULL)
-//  {
-//    /* still got pbufs to send */
-//    tcp_sent(tpcb, echo_sent);
-//    echo_send(tpcb, fd);
-//  }
-//  else
-  {
-    /* no more pbufs to send */
-    if(fd->state == ES_CLOSING)
+    if (fd->is_closing)
     {
-      rudp_close(fd);
+        // try again
+        rudp_close(fd);
     }
-  }
-  return ERR_OK;
+
+    return ERR_OK;
 }
 
-int
+/*
+  Closes the connection. The function may return ERR_MEM if no memory
+  was available for closing the connection. If so, the application
+  should wait and try again either by using the acknowledgment
+  callback or the polling functionality. If the close succeeds, the
+  function returns ERR_OK.
+
+  The pcb is deallocated by the TCP code after a call to tcp_close().
+ */
+void
 rudp_close(rudp_fd_ptr fd)
 {
-  return tcp_close(fd->pcb);
+    err_t err = tcp_close(fd->pcb);
+    if (err == ERR_OK)
+    {
+        // fd layer free
+        // let tcp layer handle next
+        rudp_free(fd);
+        return;
+    }
+
+    // possible fail
+    // try again by using poll or sent cb
+    fd->is_closing = 1;
+    printf("tcp_close failed, err=%d\n", err);
 }
 
 void rudp_free(rudp_fd_ptr fd)
 {
-  assert (fd != NULL);
+    assert (fd != NULL);
 
-  tcp_arg(fd->pcb, NULL);
-  tcp_sent(fd->pcb, NULL);
-  tcp_recv(fd->pcb, NULL);
-  tcp_err(fd->pcb, NULL);
-  tcp_poll(fd->pcb, NULL, 0);
+    tcp_arg(fd->pcb, NULL);
+    tcp_sent(fd->pcb, NULL);
+    tcp_recv(fd->pcb, NULL);
+    tcp_err(fd->pcb, NULL);
+    tcp_poll(fd->pcb, NULL, 0);
 
-  mem_free(fd);
+    mem_free(fd);
 }

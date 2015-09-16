@@ -68,7 +68,7 @@ void             tcp_fasttmr (void);
 void             tcp_txnow   (void);
 
 /* Only used by IP to pass a TCP segment to TCP: */
-void             tcp_input   (struct pbuf *p);
+void             tcp_input   (struct ip_addr_t remote_ip, u16_t remote_udp_port, struct pbuf *p);
 /* Used within the TCP code only: */
 struct tcp_pcb * tcp_alloc   (u8_t prio);
 void             tcp_abandon (struct tcp_pcb *pcb, int reset);
@@ -483,7 +483,8 @@ err_t tcp_enqueue_flags(struct tcp_pcb *pcb, u8_t flags);
 void tcp_rexmit_seg(struct tcp_pcb *pcb, struct tcp_seg *seg);
 
 void tcp_rst(u32_t seqno, u32_t ackno,
-       u16_t local_port, u16_t remote_port);
+  /*const ip_addr_t *local_ip, */const struct ip_addr_t *remote_ip,
+       u16_t local_port, u16_t remote_port, u16_t remote_udp_port);
 
 u32_t tcp_next_iss(void);
 
@@ -530,7 +531,7 @@ s16_t tcp_pcbs_sane(void);
 /** External function (implemented in timers.c), called when TCP detects
  * that a timer is needed (i.e. active- or time-wait-pcb found). */
 void tcp_timer_needed(void);
-err_t ip_output_if(struct pbuf *p);
+err_t ip_output_if(struct pbuf *p, struct ip_addr_t remote_ip, u16_t remote_port);
 
 #if LWIP_IPV4
 void tcp_netif_ipv4_addr_changed(const ip4_addr_t* old_addr, const ip4_addr_t* new_addr);

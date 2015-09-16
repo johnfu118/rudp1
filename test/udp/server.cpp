@@ -58,7 +58,7 @@ void echo_recv(rudp_fd_ptr fd, const void* buf, size_t len, err_t err)
         // echo back
         rudp_send(fd, buf, len);
 
-        rudp_close(fd);
+//        rudp_close(fd);
     }
     else
     {

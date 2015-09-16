@@ -182,7 +182,7 @@ tcp_close_shutdown(struct tcp_pcb *pcb, u8_t rst_on_unacked_data)
 
       /* don't call tcp_abort here: we must not deallocate the pcb since
          that might not be expected when calling tcp_close */
-      tcp_rst(pcb->snd_nxt, pcb->rcv_nxt, pcb->local_port, pcb->remote_port);
+      tcp_rst(pcb->snd_nxt, pcb->rcv_nxt, &pcb->remote_ip, pcb->local_port, pcb->remote_port, pcb->remote_udp_port);
 
       tcp_pcb_purge(pcb);
       TCP_RMV_ACTIVE(pcb);
@@ -401,7 +401,7 @@ tcp_abandon(struct tcp_pcb *pcb, int reset)
 #endif /* TCP_QUEUE_OOSEQ */
     if (send_rst) {
       LWIP_DEBUGF(TCP_RST_DEBUG, ("tcp_abandon: sending RST\n"));
-      tcp_rst(seqno, ackno, local_port, pcb->remote_port);
+      tcp_rst(seqno, ackno, &pcb->remote_ip, local_port, pcb->remote_port, pcb->remote_udp_port);
     }
     memp_free(MEMP_TCP_PCB, pcb);
     TCP_EVENT_ERR(errf, errf_arg, ERR_ABRT);
@@ -743,7 +743,7 @@ again:
  *         other err_t values if connect request couldn't be sent
  */
 err_t
-tcp_connect(struct tcp_pcb *pcb, u16_t port,
+tcp_connect(struct tcp_pcb *pcb, const struct ip_addr_t* ipaddr, u16_t port,
       tcp_connected_fn connected)
 {
   err_t ret;
@@ -760,12 +760,13 @@ tcp_connect(struct tcp_pcb *pcb, u16_t port,
   LWIP_ERROR("tcp_connect: can only connect from state CLOSED", pcb->state == CLOSED, return ERR_ISCONN);
 
   LWIP_DEBUGF(TCP_DEBUG, ("tcp_connect to port %"U16_F"\n", port));
-//  if (ipaddr != NULL) {
-//    ip_addr_set(&pcb->remote_ip, ipaddr);
-//  } else {
-//    return ERR_VAL;
-//  }
+  if (ipaddr != NULL) {
+    pcb->remote_ip.addr = ipaddr->addr;
+  } else {
+    return ERR_VAL;
+  }
   pcb->remote_port = port;
+  pcb->remote_udp_port = port;
 
   /* check if we have a route to the remote host */
 //  if (ip_addr_isany(&pcb->local_ip)) {
@@ -1042,7 +1043,7 @@ tcp_slowtmr_start:
       }
 
       if (pcb_reset) {
-        tcp_rst(pcb->snd_nxt, pcb->rcv_nxt, pcb->local_port, pcb->remote_port);
+        tcp_rst(pcb->snd_nxt, pcb->rcv_nxt, &pcb->remote_ip, pcb->local_port, pcb->remote_port, pcb->remote_udp_port);
       }
 
       err_fn = pcb->errf;

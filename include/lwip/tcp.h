@@ -169,6 +169,12 @@ enum tcp_state {
 #define DEF_ACCEPT_CALLBACK
 #endif /* LWIP_CALLBACK_API */
 
+struct ip_addr_t {
+  u32_t addr;
+};
+#define ip_addr_copy(dest, src) ((dest).addr = (src).addr)
+#define ip_addr_cmp(addr1, addr2) ((addr1)->addr == (addr2)->addr)
+
 /**
  * members common to struct tcp_pcb and struct tcp_listen_pcb
  * move ip addr from IP_PCB to TCP_PCB_COMMON
@@ -177,7 +183,7 @@ enum tcp_state {
 #define TCP_PCB_COMMON(type) \
   /* ip addresses in network byte order */ \
   /*ip_addr_t local_ip;*/ \
-  /*ip_addr_t remote_ip;*/ \
+  struct ip_addr_t remote_ip; \
   type *next; /* for the linked list */ \
   void *callback_arg; \
   /* the accept callback for listen- and normal pcbs, if LWIP_CALLBACK_API */ \
@@ -209,6 +215,8 @@ struct tcp_pcb {
   /* ports are in host byte order */
   u16_t remote_port;
   
+  u16_t remote_udp_port;
+
   tcpflags_t flags;
 #define TF_ACK_DELAY   0x01U   /* Delayed ACK. */
 #define TF_ACK_NOW     0x02U   /* Immediate ACK. */
@@ -385,7 +393,7 @@ void             tcp_err     (struct tcp_pcb *pcb, tcp_err_fn err);
 void             tcp_recved  (struct tcp_pcb *pcb, u16_t len);
 err_t            tcp_bind    (struct tcp_pcb *pcb, /*const ip_addr_t *ipaddr,*/
                               u16_t port);
-err_t            tcp_connect (struct tcp_pcb *pcb, /*const ip_addr_t *ipaddr,*/
+err_t            tcp_connect (struct tcp_pcb *pcb, const struct ip_addr_t *ipaddr,
                               u16_t port, tcp_connected_fn connected);
 
 struct tcp_pcb * tcp_listen_with_backlog(struct tcp_pcb *pcb, u8_t backlog);

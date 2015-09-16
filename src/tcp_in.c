@@ -87,7 +87,7 @@ static err_t tcp_process(struct tcp_pcb *pcb);
 static void tcp_receive(struct tcp_pcb *pcb);
 static void tcp_parseopt(struct tcp_pcb *pcb);
 
-static err_t tcp_listen_input(struct tcp_pcb_listen *pcb);
+static err_t tcp_listen_input(struct tcp_pcb_listen *pcb, struct ip_addr_t remote_ip, u16_t remote_udp_port);
 static err_t tcp_timewait_input(struct tcp_pcb *pcb);
 
 /**
@@ -100,7 +100,7 @@ static err_t tcp_timewait_input(struct tcp_pcb *pcb);
  * @param inp network interface on which this segment was received
  */
 void
-tcp_input(struct pbuf *p)
+tcp_input(struct ip_addr_t remote_udp_ip, u16_t remote_udp_port, struct pbuf *p)
 {
   struct tcp_pcb *pcb, *prev;
   struct tcp_pcb_listen *lpcb;
@@ -118,6 +118,7 @@ tcp_input(struct pbuf *p)
   tcphdr = (struct tcp_hdr *)p->payload;
 
 #if TCP_INPUT_DEBUG
+  LWIP_DEBUGF(TCP_DEBUG, ("Input:\n"));
   tcp_debug_print(tcphdr);
 #endif
 
@@ -187,6 +188,7 @@ tcp_input(struct pbuf *p)
     LWIP_ASSERT("tcp_input: active pcb->state != TIME-WAIT", pcb->state != TIME_WAIT);
     LWIP_ASSERT("tcp_input: active pcb->state != LISTEN", pcb->state != LISTEN);
     if (pcb->remote_port == tcphdr->src &&
+        ip_addr_cmp(&pcb->remote_ip, &remote_udp_ip) &&
         pcb->local_port == tcphdr->dest
         // TODO: seesion id check
         ) {
@@ -211,7 +213,8 @@ tcp_input(struct pbuf *p)
     for(pcb = tcp_tw_pcbs; pcb != NULL; pcb = pcb->next) {
       LWIP_ASSERT("tcp_input: TIME-WAIT pcb->state == TIME-WAIT", pcb->state == TIME_WAIT);
       if (pcb->remote_port == tcphdr->src &&
-          pcb->local_port == tcphdr->dest
+              ip_addr_cmp(&pcb->remote_ip, &remote_udp_ip) &&
+              pcb->local_port == tcphdr->dest
           // TODO: check session id
           ) {
         /* We don't really care enough to move this PCB to the front
@@ -247,7 +250,7 @@ tcp_input(struct pbuf *p)
       }
     
       LWIP_DEBUGF(TCP_INPUT_DEBUG, ("tcp_input: packed for LISTENing connection.\n"));
-      tcp_listen_input(lpcb);
+      tcp_listen_input(lpcb, remote_udp_ip, remote_udp_port);
       pbuf_free(p);
       return;
     }
@@ -441,7 +444,7 @@ aborted:
     if (!(TCPH_FLAGS(tcphdr) & TCP_RST)) {
       TCP_STATS_INC(tcp.proterr);
       TCP_STATS_INC(tcp.drop);
-      tcp_rst(ackno, seqno + tcplen, tcphdr->dest, tcphdr->src);
+      tcp_rst(ackno, seqno + tcplen, &remote_udp_ip, tcphdr->dest, tcphdr->src, remote_udp_port);
     }
     pbuf_free(p);
   }
@@ -467,7 +470,7 @@ dropped:
  *       involved is passed as a parameter to this function
  */
 static err_t
-tcp_listen_input(struct tcp_pcb_listen *pcb)
+tcp_listen_input(struct tcp_pcb_listen *pcb, struct ip_addr_t remote_udp_ip, u16_t remote_udp_port)
 {
   struct tcp_pcb *npcb;
   err_t rc;
@@ -483,7 +486,7 @@ tcp_listen_input(struct tcp_pcb_listen *pcb)
     /* For incoming segments with the ACK flag set, respond with a
        RST. */
     LWIP_DEBUGF(TCP_RST_DEBUG, ("tcp_listen_input: ACK in LISTEN, sending reset\n"));
-    tcp_rst(ackno, seqno + tcplen, tcphdr->dest, tcphdr->src);
+    tcp_rst(ackno, seqno + tcplen, &remote_udp_ip, tcphdr->dest, tcphdr->src, remote_udp_port);
   } else if (flags & TCP_SYN) {
     LWIP_DEBUGF(TCP_DEBUG, ("TCP connection request %"U16_F" -> %"U16_F".\n", tcphdr->src, tcphdr->dest));
 #if TCP_LISTEN_BACKLOG
@@ -508,8 +511,11 @@ tcp_listen_input(struct tcp_pcb_listen *pcb)
 #if LWIP_IPV4 && LWIP_IPV6
     PCB_ISIPV6(npcb) = ip_current_is_v6();
 #endif /* LWIP_IPV4 && LWIP_IPV6 */
+//    ip_addr_copy(npcb->local_ip, *ip_current_dest_addr());
+    ip_addr_copy(npcb->remote_ip, remote_udp_ip);
     npcb->local_port = pcb->local_port;
     npcb->remote_port = tcphdr->src;
+    npcb->remote_udp_port = remote_udp_port;
     npcb->state = SYN_RCVD;
     npcb->rcv_nxt = seqno + 1;
     npcb->rcv_ann_right_edge = npcb->rcv_nxt;
@@ -571,7 +577,7 @@ tcp_timewait_input(struct tcp_pcb *pcb)
        should be sent in reply */
     if (TCP_SEQ_BETWEEN(seqno, pcb->rcv_nxt, pcb->rcv_nxt + pcb->rcv_wnd)) {
       /* If the SYN is in the window it is an error, send a reset */
-      tcp_rst(ackno, seqno + tcplen, tcphdr->dest, tcphdr->src);
+      tcp_rst(ackno, seqno + tcplen, &pcb->remote_ip, tcphdr->dest, tcphdr->src, pcb->remote_udp_port);
       return ERR_OK;
     }
   } else if (flags & TCP_FIN) {
@@ -707,7 +713,7 @@ tcp_process(struct tcp_pcb *pcb)
     /* received ACK? possibly a half-open connection */
     else if (flags & TCP_ACK) {
       /* send a RST to bring the other side in a non-synchronized state. */
-      tcp_rst(ackno, seqno + tcplen, tcphdr->dest, tcphdr->src);
+      tcp_rst(ackno, seqno + tcplen, &pcb->remote_ip, tcphdr->dest, tcphdr->src, pcb->remote_udp_port);
     }
     break;
   case SYN_RCVD:
@@ -755,7 +761,7 @@ tcp_process(struct tcp_pcb *pcb)
         }
       } else {
         /* incorrect ACK number, send RST */
-        tcp_rst(ackno, seqno + tcplen, tcphdr->dest, tcphdr->src);
+        tcp_rst(ackno, seqno + tcplen, &pcb->remote_ip, tcphdr->dest, tcphdr->src, pcb->remote_udp_port);
       }
     } else if ((flags & TCP_SYN) && (seqno == pcb->rcv_nxt - 1)) {
       /* Looks like another copy of the SYN - retransmit our SYN-ACK */

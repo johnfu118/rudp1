@@ -25,9 +25,7 @@
 #include "lwip/memp.h"
 
 int udp_fd = -1;
-
-struct sockaddr_in remaddr;     /* remote address */
-static socklen_t addrlen = sizeof(remaddr);
+int uid = 1;
 
 struct timeval last_ts;
 static const unsigned int TIME_INTERVAL = 250000;
@@ -109,6 +107,10 @@ int rudp_update()
     int udp_process_count = 0;
     const int BUFSIZE = 64*1024;
     char buf[BUFSIZE];
+
+    struct sockaddr_in remaddr;     /* remote address */
+    static socklen_t addrlen = sizeof(remaddr);
+
     do
     {
         int recvlen = recvfrom(udp_fd, buf, BUFSIZE, 0, (struct sockaddr *)&remaddr, &addrlen);
@@ -134,8 +136,12 @@ int rudp_update()
             tmp_buf = tmp_buf->next;
         }
 
+        struct ip_addr_t ipaddr;
+        ipaddr.addr = remaddr.sin_addr.s_addr;
+
+        tcp_input(ipaddr, ntohs(remaddr.sin_port), mybuf);
+
         udp_process_count++;
-        tcp_input(mybuf);
     } while (udp_process_count < max_loop);
 
     struct timeval now;
@@ -322,13 +328,10 @@ int rudp_connect(rudp_fd_ptr fd, const char* ipaddr, u16_t port, rudp_connected_
     fd->connected_cb = connected_cb;
     fd->recv_cb = recv_cb;
 
-    // set udp svr addr
-    memset((char *)&remaddr, 0, sizeof(remaddr));
-    remaddr.sin_family = AF_INET;
-    remaddr.sin_addr.s_addr = inet_addr(ipaddr);
-    remaddr.sin_port = htons(port);
+    struct ip_addr_t ip;
+    ip.addr = inet_addr(ipaddr);
 
-    return tcp_connect(fd->pcb, port, on_connect);
+    return tcp_connect(fd->pcb, &ip, port, on_connect);
 }
 
 err_t on_connect(void *arg, rudp_pcb tpcb, err_t err)
@@ -382,10 +385,19 @@ int rudp_send(rudp_fd_ptr fd, const void* buf, size_t len)
     return tcp_write(fd->pcb, buf, len, 1);
 }
 
-err_t ip_output_if(struct pbuf *p)
+err_t ip_output_if(struct pbuf *p, struct ip_addr_t remote_ip, u16_t remote_port)
 {
     // TODO, how to deal with block? platform dependency!!
     // if ever blocked, tcp_txnow when recover
+
+    struct sockaddr_in remaddr;     /* remote address */
+    memset((char *)&remaddr, 0, sizeof(remaddr));
+    remaddr.sin_family = AF_INET;
+    remaddr.sin_addr.s_addr = remote_ip.addr;
+    remaddr.sin_port = htons(remote_port);
+    ;
+    printf("udp sendto %s:%u\n", inet_ntoa(remaddr.sin_addr), remote_port);
+
     int ret = sendto(udp_fd, p->payload, p->len, 0, (struct sockaddr *)&remaddr, sizeof(remaddr));
     if (ret > 0)
         return ERR_OK;

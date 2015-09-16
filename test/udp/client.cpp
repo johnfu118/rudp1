@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
+#include <unistd.h>
 
 #include "rudp.h"
 
@@ -72,6 +73,15 @@ echo_recv(rudp_fd_ptr fd, const void *p, size_t len, err_t err)
     {
         printf("recv %zu\n", len);
         printf("content: %s\n", (char*)p);
+
+        sleep(10);
+
+        int ret = rudp_send(fd, ECHO_STR, strlen(ECHO_STR));
+        if (ret != 0)
+        {
+            printf("rudp_send failed, ret=%d", ret);
+            rudp_close(fd);
+        }
     }
     else
     {

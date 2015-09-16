@@ -91,7 +91,7 @@
 /* Forward declarations.*/
 static err_t tcp_output_segment(struct tcp_seg *seg, struct tcp_pcb *pcb);
 
-err_t ip_output_if(struct pbuf *p);
+err_t ip_output_if(struct pbuf *p, struct ip_addr_t remote_ip, u16_t remote_port);
 
 /** Allocate a pbuf and create a tcphdr at p->payload, used for output
  * functions other than the default tcp_output -> tcp_output_segment
@@ -927,7 +927,7 @@ tcp_send_empty_ack(struct tcp_pcb *pcb)
   }
 #endif
 
-  err = ip_output_if(p);
+  err = ip_output_if(p, pcb->remote_ip, pcb->remote_udp_port);
   pbuf_free(p);
 
   if (err != ERR_OK) {
@@ -1188,7 +1188,12 @@ tcp_output_segment(struct tcp_seg *seg, struct tcp_pcb *pcb)
   seg->tcphdr->chksum = 0;
   TCP_STATS_INC(tcp.xmit);
 
-  err = ip_output_if(seg->p);
+#if TCP_OUTPUT_DEBUG
+  LWIP_DEBUGF(TCP_DEBUG, ("Output:\n"));
+  tcp_debug_print(seg->tcphdr);
+#endif
+
+  err = ip_output_if(seg->p, pcb->remote_ip, pcb->remote_udp_port);
 
   return err;
 }
@@ -1215,7 +1220,8 @@ tcp_output_segment(struct tcp_seg *seg, struct tcp_pcb *pcb)
  */
 void
 tcp_rst(u32_t seqno, u32_t ackno,
-  u16_t local_port, u16_t remote_port)
+  /*const ip_addr_t *local_ip, */const struct ip_addr_t *remote_ip,
+  u16_t local_port, u16_t remote_port, u16_t remote_udp_port)
 {
   struct pbuf *p;
   struct tcp_hdr *tcphdr;
@@ -1244,7 +1250,7 @@ tcp_rst(u32_t seqno, u32_t ackno,
   TCP_STATS_INC(tcp.xmit);
 
   /* Send output with hardcoded TTL/HL since we have no access to the pcb */
-  ip_output_if(p);
+  ip_output_if(p, *remote_ip, remote_udp_port);
   pbuf_free(p);
   LWIP_DEBUGF(TCP_RST_DEBUG, ("tcp_rst: seqno %"U32_F" ackno %"U32_F".\n", seqno, ackno));
 }
@@ -1412,7 +1418,7 @@ tcp_keepalive(struct tcp_pcb *pcb)
 
   TCP_STATS_INC(tcp.xmit);
   /* Send output to IP */
-  err = ip_output_if(p);
+  err = ip_output_if(p, pcb->remote_ip, pcb->remote_udp_port);
   pbuf_free(p);
 
   LWIP_DEBUGF(TCP_DEBUG, ("tcp_keepalive: seqno %"U32_F" ackno %"U32_F" err %d.\n",
@@ -1484,7 +1490,7 @@ tcp_zero_window_probe(struct tcp_pcb *pcb)
   TCP_STATS_INC(tcp.xmit);
 
   /* Send output to IP */
-  err = ip_output_if(p);
+  err = ip_output_if(p, pcb->remote_ip, pcb->remote_udp_port);
 
   pbuf_free(p);
 

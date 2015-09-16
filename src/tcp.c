@@ -567,10 +567,6 @@ tcp_listen_with_backlog(struct tcp_pcb *pcb, u8_t backlog)
   lpcb->local_port = pcb->local_port;
   lpcb->state = LISTEN;
   lpcb->prio = pcb->prio;
-#if LWIP_IPV4 && LWIP_IPV6
-  PCB_ISIPV6(lpcb) = PCB_ISIPV6(pcb);
-  lpcb->accept_any_ip_version = 0;
-#endif /* LWIP_IPV4 && LWIP_IPV6 */
 //  ip_addr_copy(lpcb->local_ip, pcb->local_ip);
   if (pcb->local_port != 0) {
     TCP_RMV(&tcp_bound_pcbs, pcb);
@@ -826,7 +822,7 @@ tcp_connect(struct tcp_pcb *pcb, const struct ip_addr_t* ipaddr, u16_t port,
      The send MSS is updated when an MSS option is received. */
   pcb->mss = (TCP_MSS > 536) ? 536 : TCP_MSS;
 #if TCP_CALCULATE_EFF_SEND_MSS
-  pcb->mss = tcp_eff_send_mss(pcb->mss, &pcb->local_ip, &pcb->remote_ip, PCB_ISIPV6(pcb));
+  pcb->mss = tcp_eff_send_mss(pcb->mss, &pcb->local_ip, &pcb->remote_ip, 0);
 #endif /* TCP_CALCULATE_EFF_SEND_MSS */
   pcb->cwnd = 1;
   pcb->ssthresh = TCP_WND;
@@ -1539,26 +1535,6 @@ tcp_new(void)
 {
   return tcp_alloc(TCP_PRIO_NORMAL);
 }
-
-#if LWIP_IPV6
-/**
- * Creates a new TCP-over-IPv6 protocol control block but doesn't
- * place it on any of the TCP PCB lists.
- * The pcb is not put on any list until binding using tcp_bind().
- *
- * @return a new tcp_pcb that initially is in state CLOSED
- */
-struct tcp_pcb *
-tcp_new_ip6(void)
-{
-  struct tcp_pcb * pcb;
-  pcb = tcp_alloc(TCP_PRIO_NORMAL);
-#if LWIP_IPV4
-  ip_set_v6(pcb, 1);
-#endif /* LWIP_IPV4 */
-  return pcb;
-}
-#endif /* LWIP_IPV6 */
 
 /**
  * Used to specify the argument that should be passed callback

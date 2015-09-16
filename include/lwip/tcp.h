@@ -193,20 +193,6 @@ struct ip_addr_t {
   /* ports are in host byte order */ \
   u16_t local_port
 
-#if LWIP_IPV6 && LWIP_IPV4
-#define IP_PCB_ISIPV6_MEMBER          u8_t isipv6;
-#define IP_PCB_IPVER_EQ(pcb1, pcb2)   ((pcb1)->isipv6 == (pcb2)->isipv6)
-#define IP_PCB_IPVER_INPUT_MATCH(pcb) (ip_current_is_v6() ? \
-                                       ((pcb)->isipv6 != 0) : \
-                                       ((pcb)->isipv6 == 0))
-#define PCB_ISIPV6(pcb) ((pcb)->isipv6)
-#else
-#define IP_PCB_ISIPV6_MEMBER
-#define IP_PCB_IPVER_EQ(pcb1, pcb2)   1
-#define IP_PCB_IPVER_INPUT_MATCH(pcb) 1
-#define PCB_ISIPV6(pcb)               LWIP_IPV6
-#endif /* LWIP_IPV6 */
-
 /* the TCP protocol control block */
 struct tcp_pcb {
 /** protocol specific PCB members */
@@ -421,9 +407,6 @@ err_t            tcp_output  (struct tcp_pcb *pcb);
 
 const char* tcp_debug_state_str(enum tcp_state s);
 
-#if LWIP_IPV6
-struct tcp_pcb * tcp_new_ip6 (void);
-#endif /* LWIP_IPV6 */
 #if LWIP_IPV4 && LWIP_IPV6
 struct tcp_pcb * tcp_listen_dual_with_backlog(struct tcp_pcb *pcb, u8_t backlog);
 #define          tcp_listen_dual(pcb) tcp_listen_dual_with_backlog(pcb, TCP_DEFAULT_LISTEN_BACKLOG)

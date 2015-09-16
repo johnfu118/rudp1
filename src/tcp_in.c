@@ -505,9 +505,6 @@ tcp_listen_input(struct tcp_pcb_listen *pcb)
     pcb->accepts_pending++;
 #endif /* TCP_LISTEN_BACKLOG */
     /* Set up the new PCB. */
-#if LWIP_IPV4 && LWIP_IPV6
-    PCB_ISIPV6(npcb) = ip_current_is_v6();
-#endif /* LWIP_IPV4 && LWIP_IPV6 */
     npcb->local_port = pcb->local_port;
     npcb->remote_port = tcphdr->src;
     npcb->state = SYN_RCVD;
@@ -530,7 +527,7 @@ tcp_listen_input(struct tcp_pcb_listen *pcb)
 
 #if TCP_CALCULATE_EFF_SEND_MSS
     npcb->mss = tcp_eff_send_mss(npcb->mss, &npcb->local_ip,
-      &npcb->remote_ip, PCB_ISIPV6(npcb));
+      &npcb->remote_ip, 0);
 #endif /* TCP_CALCULATE_EFF_SEND_MSS */
 
 
@@ -670,7 +667,7 @@ tcp_process(struct tcp_pcb *pcb)
 
 #if TCP_CALCULATE_EFF_SEND_MSS
       pcb->mss = tcp_eff_send_mss(pcb->mss, &pcb->local_ip, &pcb->remote_ip,
-        PCB_ISIPV6(pcb));
+        0);
 #endif /* TCP_CALCULATE_EFF_SEND_MSS */
 
       /* Set ssthresh again after changing 'mss' and 'snd_wnd' */
@@ -1079,12 +1076,6 @@ tcp_receive(struct tcp_pcb *pcb)
 
       pcb->polltmr = 0;
 
-#if LWIP_IPV6 && LWIP_ND6_TCP_REACHABILITY_HINTS
-      if (PCB_ISIPV6(pcb)) {
-        /* Inform neighbor reachability of forward progress. */
-        nd6_reachability_hint(ip6_current_src_addr());
-      }
-#endif /* LWIP_IPV6 && LWIP_ND6_TCP_REACHABILITY_HINTS*/
     } else {
       /* Out of sequence ACK, didn't really ack anything */
       pcb->acked = 0;
@@ -1412,13 +1403,6 @@ tcp_receive(struct tcp_pcb *pcb)
 
         /* Acknowledge the segment(s). */
         tcp_ack(pcb);
-
-#if LWIP_IPV6 && LWIP_ND6_TCP_REACHABILITY_HINTS
-        if (PCB_ISIPV6(pcb)) {
-          /* Inform neighbor reachability of forward progress. */
-          nd6_reachability_hint(ip6_current_src_addr());
-        }
-#endif /* LWIP_IPV6 && LWIP_ND6_TCP_REACHABILITY_HINTS*/
 
       } else {
         /* We get here if the incoming segment is out-of-sequence. */

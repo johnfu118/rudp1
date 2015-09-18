@@ -119,8 +119,6 @@ tcp_output_alloc_header(struct tcp_pcb *pcb, u16_t optlen, u16_t datalen,
     tcphdr->ackno = htonl(pcb->rcv_nxt);
     TCPH_HDRLEN_FLAGS_SET(tcphdr, (5 + optlen / 4), TCP_ACK);
     tcphdr->wnd = htons(TCPWND_MIN16(RCV_WND_SCALE(pcb, pcb->rcv_ann_wnd)));
-    tcphdr->chksum = 0;
-    tcphdr->urgp = 0;
 
     /* If we're sending a packet, update the announced right window edge */
     pcb->rcv_ann_right_edge = pcb->rcv_nxt + pcb->rcv_ann_wnd;
@@ -209,7 +207,6 @@ tcp_create_segment(struct tcp_pcb *pcb, struct pbuf *p, u8_t flags, u32_t seqno,
   /* ackno is set in tcp_output */
   TCPH_HDRLEN_FLAGS_SET(seg->tcphdr, (5 + optlen / 4), flags);
   /* wnd and chksum are set in tcp_output */
-  seg->tcphdr->urgp = 0;
   return seg;
 } 
 
@@ -1185,7 +1182,6 @@ tcp_output_segment(struct tcp_seg *seg, struct tcp_pcb *pcb)
 
   seg->p->payload = seg->tcphdr;
 
-  seg->tcphdr->chksum = 0;
   TCP_STATS_INC(tcp.xmit);
 
 #if TCP_OUTPUT_DEBUG
@@ -1244,8 +1240,6 @@ tcp_rst(u32_t seqno, u32_t ackno,
 #else
   tcphdr->wnd = PP_HTONS(TCP_WND);
 #endif
-  tcphdr->chksum = 0;
-  tcphdr->urgp = 0;
 
   TCP_STATS_INC(tcp.xmit);
 

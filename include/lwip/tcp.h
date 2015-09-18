@@ -175,6 +175,10 @@ struct ip_addr_t {
 #define ip_addr_copy(dest, src) ((dest).addr = (src).addr)
 #define ip_addr_cmp(addr1, addr2) ((addr1)->addr == (addr2)->addr)
 
+struct connect_id_t {
+    u32_t connid1;
+    u32_t connid2;
+};
 /**
  * members common to struct tcp_pcb and struct tcp_listen_pcb
  * move ip addr from IP_PCB to TCP_PCB_COMMON
@@ -202,6 +206,8 @@ struct tcp_pcb {
   u16_t remote_port;
   
   u16_t remote_udp_port;
+
+  struct connect_id_t conn_id;
 
   tcpflags_t flags;
 #define TF_ACK_DELAY   0x01U   /* Delayed ACK. */

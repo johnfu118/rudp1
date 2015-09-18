@@ -164,9 +164,8 @@ err_t            tcp_process_refused_data(struct tcp_pcb *pcb);
 #endif
 PACK_STRUCT_BEGIN
 struct tcp_hdr {
-  PACK_STRUCT_FIELD(u16_t src);
-  PACK_STRUCT_FIELD(u16_t dest);
-  PACK_STRUCT_FIELD(u32_t connid);
+  PACK_STRUCT_FIELD(u32_t connid1);
+  PACK_STRUCT_FIELD(u32_t connid2);
   PACK_STRUCT_FIELD(u32_t seqno);
   PACK_STRUCT_FIELD(u32_t ackno);
   PACK_STRUCT_FIELD(u16_t _hdrlen_rsvd_flags);
@@ -483,7 +482,7 @@ void tcp_rexmit_seg(struct tcp_pcb *pcb, struct tcp_seg *seg);
 
 void tcp_rst(u32_t seqno, u32_t ackno,
   /*const ip_addr_t *local_ip, */const struct ip_addr_t *remote_ip,
-       u16_t local_port, u16_t remote_port, u16_t remote_udp_port);
+       const struct connect_id_t *conn_id, u16_t remote_udp_port);
 
 u32_t tcp_next_iss(void);
 

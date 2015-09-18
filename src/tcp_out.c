@@ -113,8 +113,8 @@ tcp_output_alloc_header(struct tcp_pcb *pcb, u16_t optlen, u16_t datalen,
     LWIP_ASSERT("check that first pbuf can hold struct tcp_hdr",
                  (p->len >= TCP_HLEN + optlen));
     tcphdr = (struct tcp_hdr *)p->payload;
-    tcphdr->src = htons(pcb->local_port);
-    tcphdr->dest = htons(pcb->remote_port);
+    tcphdr->connid1 = htonl(pcb->conn_id.connid1);
+    tcphdr->connid2 = htonl(pcb->conn_id.connid2);
     tcphdr->seqno = seqno_be;
     tcphdr->ackno = htonl(pcb->rcv_nxt);
     TCPH_HDRLEN_FLAGS_SET(tcphdr, (5 + optlen / 4), TCP_ACK);
@@ -201,8 +201,8 @@ tcp_create_segment(struct tcp_pcb *pcb, struct pbuf *p, u8_t flags, u32_t seqno,
     return NULL;
   }
   seg->tcphdr = (struct tcp_hdr *)seg->p->payload;
-  seg->tcphdr->src = htons(pcb->local_port);
-  seg->tcphdr->dest = htons(pcb->remote_port);
+  seg->tcphdr->connid1 = htonl(pcb->conn_id.connid1);
+  seg->tcphdr->connid2 = htonl(pcb->conn_id.connid2);
   seg->tcphdr->seqno = htonl(seqno);
   /* ackno is set in tcp_output */
   TCPH_HDRLEN_FLAGS_SET(seg->tcphdr, (5 + optlen / 4), flags);
@@ -1217,7 +1217,7 @@ tcp_output_segment(struct tcp_seg *seg, struct tcp_pcb *pcb)
 void
 tcp_rst(u32_t seqno, u32_t ackno,
   /*const ip_addr_t *local_ip, */const struct ip_addr_t *remote_ip,
-  u16_t local_port, u16_t remote_port, u16_t remote_udp_port)
+  const struct connect_id_t *conn_id, u16_t remote_udp_port)
 {
   struct pbuf *p;
   struct tcp_hdr *tcphdr;
@@ -1230,8 +1230,8 @@ tcp_rst(u32_t seqno, u32_t ackno,
               (p->len >= sizeof(struct tcp_hdr)));
 
   tcphdr = (struct tcp_hdr *)p->payload;
-  tcphdr->src = htons(local_port);
-  tcphdr->dest = htons(remote_port);
+  tcphdr->connid1 = htonl(conn_id->connid1);
+  tcphdr->connid2 = htonl(conn_id->connid2);
   tcphdr->seqno = htonl(seqno);
   tcphdr->ackno = htonl(ackno);
   TCPH_HDRLEN_FLAGS_SET(tcphdr, TCP_HLEN/4, TCP_RST | TCP_ACK);

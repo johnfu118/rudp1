@@ -51,7 +51,7 @@ tcp_remove_all(void)
 /** Create a TCP segment usable for passing to tcp_input */
 static void
 tcp_create_segment_wnd(ip_addr_t* src_ip, ip_addr_t* dst_ip,
-                   u16_t src_port, u16_t dst_port, void* data, size_t data_len,
+                   const struct connect_id_t *conn_id, void* data, size_t data_len,
                    u32_t seqno, u32_t ackno, u8_t headerflags, u16_t wnd, struct pbuf** buf)
 {
   struct pbuf *p, *q;
@@ -88,8 +88,8 @@ tcp_create_segment_wnd(ip_addr_t* src_ip, ip_addr_t* dst_ip,
 */
 
   tcphdr = static_cast<tcp_hdr*>(p->payload);
-  tcphdr->src   = htons(src_port);
-  tcphdr->dest  = htons(dst_port);
+  tcphdr->connid1 = htonl(conn_id->connid1);
+  tcphdr->connid2 = htonl(conn_id->connid2);
   tcphdr->seqno = htonl(seqno);
   tcphdr->ackno = htonl(ackno);
   TCPH_HDRLEN_SET(tcphdr, sizeof(struct tcp_hdr)/4);
@@ -118,10 +118,10 @@ tcp_create_segment_wnd(ip_addr_t* src_ip, ip_addr_t* dst_ip,
 /** Create a TCP segment usable for passing to tcp_input */
 void
 tcp_create_segment(ip_addr_t* src_ip, ip_addr_t* dst_ip,
-                   u16_t src_port, u16_t dst_port, void* data, size_t data_len,
+                   const struct connect_id_t *conn_id, void* data, size_t data_len,
                    u32_t seqno, u32_t ackno, u8_t headerflags, struct pbuf** buf)
 {
-  tcp_create_segment_wnd(src_ip, dst_ip, src_port, dst_port, data,
+  tcp_create_segment_wnd(src_ip, dst_ip, conn_id, data,
     data_len, seqno, ackno, headerflags, TCP_WND, buf);
 }
 
@@ -133,7 +133,7 @@ void
 tcp_create_rx_segment(struct tcp_pcb* pcb, void* data, size_t data_len, u32_t seqno_offset,
                       u32_t ackno_offset, u8_t headerflags, struct pbuf** buf)
 {
-  tcp_create_segment(&pcb->remote_ip, 0, pcb->remote_port, pcb->local_port,
+  tcp_create_segment(&pcb->remote_ip, 0, &pcb->conn_id,
     data, data_len, pcb->rcv_nxt + seqno_offset, pcb->lastack + ackno_offset, headerflags, buf);
 }
 
@@ -145,7 +145,7 @@ tcp_create_rx_segment(struct tcp_pcb* pcb, void* data, size_t data_len, u32_t se
 void tcp_create_rx_segment_wnd(struct tcp_pcb* pcb, void* data, size_t data_len,
                    u32_t seqno_offset, u32_t ackno_offset, u8_t headerflags, u16_t wnd, struct pbuf** buf)
 {
-  tcp_create_segment_wnd(&pcb->remote_ip, 0, pcb->remote_port, pcb->local_port,
+  tcp_create_segment_wnd(&pcb->remote_ip, 0, &pcb->conn_id,
     data, data_len, pcb->rcv_nxt + seqno_offset, pcb->lastack + ackno_offset, headerflags, wnd, buf);
 }
 

@@ -182,7 +182,7 @@ tcp_close_shutdown(struct tcp_pcb *pcb, u8_t rst_on_unacked_data)
 
       /* don't call tcp_abort here: we must not deallocate the pcb since
          that might not be expected when calling tcp_close */
-      tcp_rst(pcb->snd_nxt, pcb->rcv_nxt, &pcb->remote_ip, pcb->local_port, pcb->remote_port, pcb->remote_udp_port);
+      tcp_rst(pcb->snd_nxt, pcb->rcv_nxt, &pcb->remote_ip, &pcb->conn_id, pcb->remote_udp_port);
 
       tcp_pcb_purge(pcb);
       TCP_RMV_ACTIVE(pcb);
@@ -401,7 +401,7 @@ tcp_abandon(struct tcp_pcb *pcb, int reset)
 #endif /* TCP_QUEUE_OOSEQ */
     if (send_rst) {
       LWIP_DEBUGF(TCP_RST_DEBUG, ("tcp_abandon: sending RST\n"));
-      tcp_rst(seqno, ackno, &pcb->remote_ip, local_port, pcb->remote_port, pcb->remote_udp_port);
+      tcp_rst(seqno, ackno, &pcb->remote_ip, &pcb->conn_id, pcb->remote_udp_port);
     }
     memp_free(MEMP_TCP_PCB, pcb);
     TCP_EVENT_ERR(errf, errf_arg, ERR_ABRT);
@@ -808,6 +808,9 @@ tcp_connect(struct tcp_pcb *pcb, const struct ip_addr_t* ipaddr, u16_t port,
     }
   }
 #endif /* SO_REUSE */
+  pcb->conn_id.connid1 = pcb->local_port;
+  pcb->conn_id.connid2 = 0;
+
   iss = tcp_next_iss();
   pcb->rcv_nxt = 0;
   pcb->snd_nxt = iss;
@@ -1039,7 +1042,7 @@ tcp_slowtmr_start:
       }
 
       if (pcb_reset) {
-        tcp_rst(pcb->snd_nxt, pcb->rcv_nxt, &pcb->remote_ip, pcb->local_port, pcb->remote_port, pcb->remote_udp_port);
+        tcp_rst(pcb->snd_nxt, pcb->rcv_nxt, &pcb->remote_ip, &pcb->conn_id, pcb->remote_udp_port);
       }
 
       err_fn = pcb->errf;
@@ -1893,8 +1896,8 @@ tcp_debug_print(struct tcp_hdr *tcphdr)
 {
   LWIP_DEBUGF(TCP_DEBUG, ("TCP header:\n"));
   LWIP_DEBUGF(TCP_DEBUG, ("+-------------------------------+\n"));
-  LWIP_DEBUGF(TCP_DEBUG, ("|    %5"U16_F"      |    %5"U16_F"      | (src port, dest port)\n",
-         ntohs(tcphdr->src), ntohs(tcphdr->dest)));
+  LWIP_DEBUGF(TCP_DEBUG, ("|    %010"U32_F"      |    %010"U32_F"      | (connid1, connid2)\n",
+         ntohl(tcphdr->connid1), ntohl(tcphdr->connid2)));
   LWIP_DEBUGF(TCP_DEBUG, ("+-------------------------------+\n"));
   LWIP_DEBUGF(TCP_DEBUG, ("|           %010"U32_F"          | (seq no)\n",
           ntohl(tcphdr->seqno)));

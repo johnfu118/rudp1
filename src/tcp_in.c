@@ -87,7 +87,7 @@ static err_t tcp_process(struct tcp_pcb *pcb);
 static void tcp_receive(struct tcp_pcb *pcb);
 static void tcp_parseopt(struct tcp_pcb *pcb);
 
-static err_t tcp_listen_input(struct tcp_pcb_listen *pcb, struct ip_addr_t remote_ip, u16_t remote_udp_port);
+static err_t tcp_listen_input(struct tcp_pcb_listen *pcb, const struct ip_addr_t *remote_ip, u16_t remote_udp_port, const struct connect_id_t *conn_id);
 static err_t tcp_timewait_input(struct tcp_pcb *pcb);
 
 /**
@@ -169,8 +169,8 @@ tcp_input(struct ip_addr_t remote_udp_ip, u16_t remote_udp_port, struct pbuf *p)
   }
 
   /* Convert fields in TCP header to host byte order. */
-  tcphdr->src = ntohs(tcphdr->src);
-  tcphdr->dest = ntohs(tcphdr->dest);
+  tcphdr->connid1 = ntohl(tcphdr->connid1);
+  tcphdr->connid2 = ntohs(tcphdr->connid2);
   seqno = tcphdr->seqno = ntohl(tcphdr->seqno);
   ackno = tcphdr->ackno = ntohl(tcphdr->ackno);
   tcphdr->wnd = ntohs(tcphdr->wnd);
@@ -187,11 +187,8 @@ tcp_input(struct ip_addr_t remote_udp_ip, u16_t remote_udp_port, struct pbuf *p)
     LWIP_ASSERT("tcp_input: active pcb->state != CLOSED", pcb->state != CLOSED);
     LWIP_ASSERT("tcp_input: active pcb->state != TIME-WAIT", pcb->state != TIME_WAIT);
     LWIP_ASSERT("tcp_input: active pcb->state != LISTEN", pcb->state != LISTEN);
-    if (pcb->remote_port == tcphdr->src &&
-        ip_addr_cmp(&pcb->remote_ip, &remote_udp_ip) &&
-        pcb->local_port == tcphdr->dest
-        // TODO: seesion id check
-        ) {
+    if (pcb->conn_id.connid1 == tcphdr->connid1 &&
+        pcb->conn_id.connid2== tcphdr->connid2) {
       /* Move this PCB to the front of the list so that subsequent
          lookups will be faster (we exploit locality in TCP segment
          arrivals). */
@@ -212,11 +209,8 @@ tcp_input(struct ip_addr_t remote_udp_ip, u16_t remote_udp_port, struct pbuf *p)
        in the TIME-WAIT state. */
     for(pcb = tcp_tw_pcbs; pcb != NULL; pcb = pcb->next) {
       LWIP_ASSERT("tcp_input: TIME-WAIT pcb->state == TIME-WAIT", pcb->state == TIME_WAIT);
-      if (pcb->remote_port == tcphdr->src &&
-              ip_addr_cmp(&pcb->remote_ip, &remote_udp_ip) &&
-              pcb->local_port == tcphdr->dest
-          // TODO: check session id
-          ) {
+      if (pcb->conn_id.connid1 == tcphdr->connid1 &&
+              pcb->conn_id.connid2 == tcphdr-> connid2) {
         /* We don't really care enough to move this PCB to the front
            of the list since we are not very likely to receive that
            many segments for connections in TIME-WAIT. */
@@ -232,9 +226,10 @@ tcp_input(struct ip_addr_t remote_udp_ip, u16_t remote_udp_port, struct pbuf *p)
     prev = NULL;
     for(lpcb = tcp_listen_pcbs.listen_pcbs; lpcb != NULL; lpcb = lpcb->next) {
         // TODO: only listen(check) on port?
-      if (lpcb->local_port == tcphdr->dest) {
+        // 遗留问题，这里需要保留local_addr和local_port，否则不能同时出现多个监听的情况。
+      //if (lpcb->local_port == remote_udp_port) {
             break;
-      }
+      //}
       prev = (struct tcp_pcb *)lpcb;
     }
     if (lpcb != NULL) {
@@ -250,7 +245,10 @@ tcp_input(struct ip_addr_t remote_udp_ip, u16_t remote_udp_port, struct pbuf *p)
       }
     
       LWIP_DEBUGF(TCP_INPUT_DEBUG, ("tcp_input: packed for LISTENing connection.\n"));
-      tcp_listen_input(lpcb, remote_udp_ip, remote_udp_port);
+      struct connect_id_t conn_id;
+      conn_id.connid1 = tcphdr->connid1;
+      conn_id.connid2 = tcphdr->connid2;
+      tcp_listen_input(lpcb, &remote_udp_ip, remote_udp_port, &conn_id);
       pbuf_free(p);
       return;
     }
@@ -444,7 +442,7 @@ aborted:
     if (!(TCPH_FLAGS(tcphdr) & TCP_RST)) {
       TCP_STATS_INC(tcp.proterr);
       TCP_STATS_INC(tcp.drop);
-      tcp_rst(ackno, seqno + tcplen, &remote_udp_ip, tcphdr->dest, tcphdr->src, remote_udp_port);
+      tcp_rst(ackno, seqno + tcplen, &remote_udp_ip, &pcb->conn_id, remote_udp_port);
     }
     pbuf_free(p);
   }
@@ -470,7 +468,7 @@ dropped:
  *       involved is passed as a parameter to this function
  */
 static err_t
-tcp_listen_input(struct tcp_pcb_listen *pcb, struct ip_addr_t remote_udp_ip, u16_t remote_udp_port)
+tcp_listen_input(struct tcp_pcb_listen *pcb, const struct ip_addr_t *remote_udp_ip, u16_t remote_udp_port, const struct connect_id_t *conn_id)
 {
   struct tcp_pcb *npcb;
   err_t rc;
@@ -486,12 +484,12 @@ tcp_listen_input(struct tcp_pcb_listen *pcb, struct ip_addr_t remote_udp_ip, u16
     /* For incoming segments with the ACK flag set, respond with a
        RST. */
     LWIP_DEBUGF(TCP_RST_DEBUG, ("tcp_listen_input: ACK in LISTEN, sending reset\n"));
-    tcp_rst(ackno, seqno + tcplen, &remote_udp_ip, tcphdr->dest, tcphdr->src, remote_udp_port);
+    tcp_rst(ackno, seqno + tcplen, remote_udp_ip, conn_id, remote_udp_port);
   } else if (flags & TCP_SYN) {
-    LWIP_DEBUGF(TCP_DEBUG, ("TCP connection request %"U16_F" -> %"U16_F".\n", tcphdr->src, tcphdr->dest));
+    LWIP_DEBUGF(TCP_DEBUG, ("TCP connection request %"U16_F" -> %"U16_F".\n", remote_udp_port, pcb->local_port));
 #if TCP_LISTEN_BACKLOG
     if (pcb->accepts_pending >= pcb->backlog) {
-      LWIP_DEBUGF(TCP_DEBUG, ("tcp_listen_input: listen backlog exceeded for port %"U16_F"\n", tcphdr->dest));
+      LWIP_DEBUGF(TCP_DEBUG, ("tcp_listen_input: listen backlog exceeded for port %"U16_F"\n", pcb->local_port));
       return ERR_ABRT;
     }
 #endif /* TCP_LISTEN_BACKLOG */
@@ -512,10 +510,11 @@ tcp_listen_input(struct tcp_pcb_listen *pcb, struct ip_addr_t remote_udp_ip, u16
     PCB_ISIPV6(npcb) = ip_current_is_v6();
 #endif /* LWIP_IPV4 && LWIP_IPV6 */
 //    ip_addr_copy(npcb->local_ip, *ip_current_dest_addr());
-    ip_addr_copy(npcb->remote_ip, remote_udp_ip);
+    ip_addr_copy(npcb->remote_ip, *remote_udp_ip);
     npcb->local_port = pcb->local_port;
-    npcb->remote_port = tcphdr->src;
+    npcb->remote_port = remote_udp_port;
     npcb->remote_udp_port = remote_udp_port;
+    npcb->conn_id = *conn_id;
     npcb->state = SYN_RCVD;
     npcb->rcv_nxt = seqno + 1;
     npcb->rcv_ann_right_edge = npcb->rcv_nxt;
@@ -577,7 +576,7 @@ tcp_timewait_input(struct tcp_pcb *pcb)
        should be sent in reply */
     if (TCP_SEQ_BETWEEN(seqno, pcb->rcv_nxt, pcb->rcv_nxt + pcb->rcv_wnd)) {
       /* If the SYN is in the window it is an error, send a reset */
-      tcp_rst(ackno, seqno + tcplen, &pcb->remote_ip, tcphdr->dest, tcphdr->src, pcb->remote_udp_port);
+      tcp_rst(ackno, seqno + tcplen, &pcb->remote_ip, &pcb->conn_id, pcb->remote_udp_port);
       return ERR_OK;
     }
   } else if (flags & TCP_FIN) {
@@ -713,7 +712,7 @@ tcp_process(struct tcp_pcb *pcb)
     /* received ACK? possibly a half-open connection */
     else if (flags & TCP_ACK) {
       /* send a RST to bring the other side in a non-synchronized state. */
-      tcp_rst(ackno, seqno + tcplen, &pcb->remote_ip, tcphdr->dest, tcphdr->src, pcb->remote_udp_port);
+      tcp_rst(ackno, seqno + tcplen, &pcb->remote_ip, &pcb->conn_id, pcb->remote_udp_port);
     }
     break;
   case SYN_RCVD:
@@ -721,7 +720,7 @@ tcp_process(struct tcp_pcb *pcb)
       /* expected ACK number? */
       if (TCP_SEQ_BETWEEN(ackno, pcb->lastack+1, pcb->snd_nxt)) {
         pcb->state = ESTABLISHED;
-        LWIP_DEBUGF(TCP_DEBUG, ("TCP connection established %"U16_F" -> %"U16_F".\n", inseg.tcphdr->src, inseg.tcphdr->dest));
+        LWIP_DEBUGF(TCP_DEBUG, ("TCP connection established %"U16_F" -> %"U16_F".\n", pcb->remote_port, pcb->local_port));
 #if LWIP_CALLBACK_API
         LWIP_ASSERT("pcb->accept != NULL", pcb->accept != NULL);
 #endif
@@ -761,7 +760,7 @@ tcp_process(struct tcp_pcb *pcb)
         }
       } else {
         /* incorrect ACK number, send RST */
-        tcp_rst(ackno, seqno + tcplen, &pcb->remote_ip, tcphdr->dest, tcphdr->src, pcb->remote_udp_port);
+        tcp_rst(ackno, seqno + tcplen, &pcb->remote_ip, &pcb->conn_id, pcb->remote_udp_port);
       }
     } else if ((flags & TCP_SYN) && (seqno == pcb->rcv_nxt - 1)) {
       /* Looks like another copy of the SYN - retransmit our SYN-ACK */
@@ -781,8 +780,9 @@ tcp_process(struct tcp_pcb *pcb)
     tcp_receive(pcb);
     if (recv_flags & TF_GOT_FIN) {
       if ((flags & TCP_ACK) && (ackno == pcb->snd_nxt)) {
+          // TODO 可能不准确，应当是客户端端口->服务器端口
         LWIP_DEBUGF(TCP_DEBUG,
-          ("TCP connection closed: FIN_WAIT_1 %"U16_F" -> %"U16_F".\n", inseg.tcphdr->src, inseg.tcphdr->dest));
+          ("TCP connection closed: FIN_WAIT_1 %"U16_F" -> %"U16_F".\n", pcb->remote_port, pcb->local_port));
         tcp_ack_now(pcb);
         tcp_pcb_purge(pcb);
         TCP_RMV_ACTIVE(pcb);
@@ -799,7 +799,7 @@ tcp_process(struct tcp_pcb *pcb)
   case FIN_WAIT_2:
     tcp_receive(pcb);
     if (recv_flags & TF_GOT_FIN) {
-      LWIP_DEBUGF(TCP_DEBUG, ("TCP connection closed: FIN_WAIT_2 %"U16_F" -> %"U16_F".\n", inseg.tcphdr->src, inseg.tcphdr->dest));
+      LWIP_DEBUGF(TCP_DEBUG, ("TCP connection closed: FIN_WAIT_2 %"U16_F" -> %"U16_F".\n", pcb->remote_port, pcb->local_port));
       tcp_ack_now(pcb);
       tcp_pcb_purge(pcb);
       TCP_RMV_ACTIVE(pcb);
@@ -810,7 +810,7 @@ tcp_process(struct tcp_pcb *pcb)
   case CLOSING:
     tcp_receive(pcb);
     if (flags & TCP_ACK && ackno == pcb->snd_nxt) {
-      LWIP_DEBUGF(TCP_DEBUG, ("TCP connection closed: CLOSING %"U16_F" -> %"U16_F".\n", inseg.tcphdr->src, inseg.tcphdr->dest));
+      LWIP_DEBUGF(TCP_DEBUG, ("TCP connection closed: CLOSING %"U16_F" -> %"U16_F".\n", pcb->remote_port, pcb->local_port));
       tcp_pcb_purge(pcb);
       TCP_RMV_ACTIVE(pcb);
       pcb->state = TIME_WAIT;
@@ -820,7 +820,7 @@ tcp_process(struct tcp_pcb *pcb)
   case LAST_ACK:
     tcp_receive(pcb);
     if (flags & TCP_ACK && ackno == pcb->snd_nxt) {
-      LWIP_DEBUGF(TCP_DEBUG, ("TCP connection closed: LAST_ACK %"U16_F" -> %"U16_F".\n", inseg.tcphdr->src, inseg.tcphdr->dest));
+      LWIP_DEBUGF(TCP_DEBUG, ("TCP connection closed: LAST_ACK %"U16_F" -> %"U16_F".\n", pcb->remote_port, pcb->local_port));
       /* bugfix #21699: don't set pcb->state to CLOSED here or we risk leaking segments */
       recv_flags |= TF_CLOSED;
     }

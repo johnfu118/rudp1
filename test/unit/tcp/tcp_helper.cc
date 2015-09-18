@@ -5,19 +5,18 @@
 #include "lwip/tcp_impl.h"
 #include "lwip/stats.h"
 #include "lwip/pbuf.h"
-#include "lwip/inet_chksum.h"
-#include "lwip/ip_addr.h"
+#include "lwip/def.h"
 
 #if !LWIP_STATS || !TCP_STATS || !MEMP_STATS
 #error "This tests needs TCP- and MEMP-statistics enabled"
 #endif
 
-void ip_output_if_real(struct pbuf *p);
+void ip_output_if_real(struct pbuf *p, ip_addr_t addr, u16_t port);
 extern "C"
 {
-err_t ip_output_if(struct pbuf *p)
+err_t ip_output_if(struct pbuf *p, ip_addr_t addr, u16_t port)
 {
-    ip_output_if_real(p);
+    ip_output_if_real(p, addr, port);
     return ERR_OK;
 }
 }
@@ -122,7 +121,7 @@ tcp_create_segment(ip_addr_t* src_ip, ip_addr_t* dst_ip,
                    u16_t src_port, u16_t dst_port, void* data, size_t data_len,
                    u32_t seqno, u32_t ackno, u8_t headerflags, struct pbuf** buf)
 {
-  return tcp_create_segment_wnd(src_ip, dst_ip, src_port, dst_port, data,
+  tcp_create_segment_wnd(src_ip, dst_ip, src_port, dst_port, data,
     data_len, seqno, ackno, headerflags, TCP_WND, buf);
 }
 
@@ -134,7 +133,7 @@ void
 tcp_create_rx_segment(struct tcp_pcb* pcb, void* data, size_t data_len, u32_t seqno_offset,
                       u32_t ackno_offset, u8_t headerflags, struct pbuf** buf)
 {
-  return tcp_create_segment(&pcb->remote_ip, &pcb->local_ip, pcb->remote_port, pcb->local_port,
+  tcp_create_segment(&pcb->remote_ip, 0, pcb->remote_port, pcb->local_port,
     data, data_len, pcb->rcv_nxt + seqno_offset, pcb->lastack + ackno_offset, headerflags, buf);
 }
 
@@ -146,7 +145,7 @@ tcp_create_rx_segment(struct tcp_pcb* pcb, void* data, size_t data_len, u32_t se
 void tcp_create_rx_segment_wnd(struct tcp_pcb* pcb, void* data, size_t data_len,
                    u32_t seqno_offset, u32_t ackno_offset, u8_t headerflags, u16_t wnd, struct pbuf** buf)
 {
-  return tcp_create_segment_wnd(&pcb->remote_ip, &pcb->local_ip, pcb->remote_port, pcb->local_port,
+  tcp_create_segment_wnd(&pcb->remote_ip, 0, pcb->remote_port, pcb->local_port,
     data, data_len, pcb->rcv_nxt + seqno_offset, pcb->lastack + ackno_offset, headerflags, wnd, buf);
 }
 
@@ -160,17 +159,17 @@ tcp_set_state(struct tcp_pcb* pcb, enum tcp_state state, ip_addr_t* local_ip,
   pcb->state = state;
   if (state == ESTABLISHED) {
     TCP_REG(&tcp_active_pcbs, pcb);
-    pcb->local_ip.addr = local_ip->addr;
+    //pcb->local_ip.addr = local_ip->addr;
     pcb->local_port = local_port;
     pcb->remote_ip.addr = remote_ip->addr;
     pcb->remote_port = remote_port;
   } else if(state == LISTEN) {
     TCP_REG(&tcp_listen_pcbs.pcbs, pcb);
-    pcb->local_ip.addr = local_ip->addr;
+    //pcb->local_ip.addr = local_ip->addr;
     pcb->local_port = local_port;
   } else if(state == TIME_WAIT) {
     TCP_REG(&tcp_tw_pcbs, pcb);
-    pcb->local_ip.addr = local_ip->addr;
+    //pcb->local_ip.addr = local_ip->addr;
     pcb->local_port = local_port;
     pcb->remote_ip.addr = remote_ip->addr;
     pcb->remote_port = remote_port;
@@ -263,12 +262,12 @@ void ip_output_if_init()
     memset(&txcounters, 0, sizeof(struct test_tcp_txcounters));
 }
 
-void ip_output_if_real(struct pbuf *p)
+void ip_output_if_real(struct pbuf *p, ip_addr_t addr, u16_t port)
 {
   txcounters.num_tx_calls++;
   txcounters.num_tx_bytes += p->tot_len;
   if (txcounters.copy_tx_packets) {
-      struct pbuf *p_copy = pbuf_alloc(PBUF_LINK, p->tot_len, PBUF_RAM);
+      struct pbuf *p_copy = pbuf_alloc(PBUF_TRANSPORT, p->tot_len, PBUF_RAM);
       err_t err;
       ASSERT_TRUE(p_copy != NULL);
       err = pbuf_copy(p_copy, p);

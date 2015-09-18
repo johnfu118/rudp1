@@ -118,7 +118,7 @@ TEST_F(LWIPTest, test_tcp_recv_inseq)
   ASSERT_TRUE(p != NULL);
   if (p != NULL) {
     /* pass the segment to tcp_input */
-    tcp_input(p);
+    tcp_input(remote_ip, remote_port, p);
 //    tcp_input(p);
     /* check if counters are as expected */
     ASSERT_TRUE(counters.close_calls == 0);
@@ -181,7 +181,7 @@ TEST_F(LWIPTest, test_tcp_fast_retx_recover)
  /* "recv" ACK for data1 */
   tcp_create_rx_segment(pcb, NULL, 0, 0, 4, TCP_ACK, &p);
   ASSERT_TRUE(p != NULL);
-  tcp_input(p);
+  tcp_input(remote_ip, remote_port, p);
   ASSERT_TRUE(txcounters.num_tx_calls == 0);
   ASSERT_TRUE(pcb->unacked == NULL);
   /* send data2 */
@@ -195,7 +195,7 @@ TEST_F(LWIPTest, test_tcp_fast_retx_recover)
   /* duplicate ACK for data1 (data2 is lost) */
   tcp_create_rx_segment(pcb, NULL, 0, 0, 0, TCP_ACK, &p);
   ASSERT_TRUE(p != NULL);
-  tcp_input(p);
+  tcp_input(remote_ip, remote_port, p);
   ASSERT_TRUE(txcounters.num_tx_calls == 0);
   ASSERT_TRUE(pcb->dupacks == 1);
   /* send data3 */
@@ -210,7 +210,7 @@ TEST_F(LWIPTest, test_tcp_fast_retx_recover)
   /* 2nd duplicate ACK for data1 (data2 and data3 are lost) */
   tcp_create_rx_segment(pcb, NULL, 0, 0, 0, TCP_ACK, &p);
   ASSERT_TRUE(p != NULL);
-  tcp_input(p);
+  tcp_input(remote_ip, remote_port, p);
   ASSERT_TRUE(txcounters.num_tx_calls == 0);
   ASSERT_TRUE(pcb->dupacks == 2);
   /* queue data4, don't send it (unsent-oversize is != 0) */
@@ -219,7 +219,7 @@ TEST_F(LWIPTest, test_tcp_fast_retx_recover)
   /* 3nd duplicate ACK for data1 (data2 and data3 are lost) -> fast retransmission */
   tcp_create_rx_segment(pcb, NULL, 0, 0, 0, TCP_ACK, &p);
   ASSERT_TRUE(p != NULL);
-  tcp_input(p);
+  tcp_input(remote_ip, remote_port, p);
   /*ASSERT_TRUE(txcounters.num_tx_calls == 1);*/
   ASSERT_TRUE(pcb->dupacks == 3);
   memset(&txcounters, 0, sizeof(txcounters));
@@ -272,7 +272,7 @@ TEST_F(LWIPTest, test_tcp_fast_retx_recover)
   /* send ACKs for data2 and data3 */
   tcp_create_rx_segment(pcb, NULL, 0, 0, 12, TCP_ACK, &p);
   ASSERT_TRUE(p != NULL);
-  tcp_input(p);
+  tcp_input(remote_ip, remote_port, p);
   /*ASSERT_TRUE(txcounters.num_tx_calls == 0);*/
 
   /* ...and even more data */
@@ -388,7 +388,7 @@ TEST_F(LWIPTest, test_tcp_fast_rexmit_wraparound)
 
   /* ACK the first segment */
   tcp_create_rx_segment(pcb, NULL, 0, 0, TCP_MSS, TCP_ACK, &p);
-  tcp_input(p);
+  tcp_input(remote_ip, remote_port, p);
   /* ensure this didn't trigger a retransmission */
   ASSERT_TRUE(txcounters.num_tx_calls == 1);
   ASSERT_TRUE(txcounters.num_tx_bytes == TCP_MSS + sizeof(struct tcp_hdr));
@@ -399,16 +399,16 @@ TEST_F(LWIPTest, test_tcp_fast_rexmit_wraparound)
   /* 3 dupacks */
   ASSERT_TRUE(pcb->dupacks == 0);
   tcp_create_rx_segment(pcb, NULL, 0, 0, 0, TCP_ACK, &p);
-  tcp_input(p);
+  tcp_input(remote_ip, remote_port, p);
   ASSERT_TRUE(txcounters.num_tx_calls == 0);
   ASSERT_TRUE(pcb->dupacks == 1);
   tcp_create_rx_segment(pcb, NULL, 0, 0, 0, TCP_ACK, &p);
-  tcp_input(p);
+  tcp_input(remote_ip, remote_port, p);
   ASSERT_TRUE(txcounters.num_tx_calls == 0);
   ASSERT_TRUE(pcb->dupacks == 2);
   /* 3rd dupack -> fast rexmit */
   tcp_create_rx_segment(pcb, NULL, 0, 0, 0, TCP_ACK, &p);
-  tcp_input(p);
+  tcp_input(remote_ip, remote_port, p);
   ASSERT_TRUE(pcb->dupacks == 3);
   /**
    * fast retransmit +1
@@ -592,7 +592,7 @@ static void test_tcp_tx_full_window_lost(u8_t zero_window_probe_from_unsent)
 
   /* now ACK the packet before the first */
   tcp_create_rx_segment(pcb, NULL, 0, 0, 0, TCP_ACK, &p);
-  tcp_input(p);
+  tcp_input(remote_ip, remote_port, p);
   /* ensure this didn't trigger a retransmission */
   ASSERT_TRUE(txcounters.num_tx_calls == 0);
   ASSERT_TRUE(txcounters.num_tx_bytes == 0);
@@ -612,7 +612,7 @@ static void test_tcp_tx_full_window_lost(u8_t zero_window_probe_from_unsent)
   if (zero_window_probe_from_unsent) {
     /* ACK all data but close the TX window */
     tcp_create_rx_segment_wnd(pcb, NULL, 0, 0, TCP_WND, TCP_ACK, 0, &p);
-    tcp_input(p);
+    tcp_input(remote_ip, remote_port, p);
     /* ensure this didn't trigger any transmission */
     ASSERT_TRUE(txcounters.num_tx_calls == 0);
     ASSERT_TRUE(txcounters.num_tx_bytes == 0);

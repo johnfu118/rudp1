@@ -90,6 +90,8 @@ static void tcp_parseopt(struct tcp_pcb *pcb);
 static err_t tcp_listen_input(struct tcp_pcb_listen *pcb, const struct ip_addr_t *remote_ip, u16_t remote_udp_port, const struct connect_id_t *conn_id);
 static err_t tcp_timewait_input(struct tcp_pcb *pcb);
 
+extern u32_t tcp_new_server_id(void);
+
 /**
  * The initial input processing of TCP. It verifies the TCP header, demultiplexes
  * the segment between the PCBs and passes it on to tcp_process(), which implements
@@ -170,7 +172,7 @@ tcp_input(struct ip_addr_t remote_udp_ip, u16_t remote_udp_port, struct pbuf *p)
 
   /* Convert fields in TCP header to host byte order. */
   tcphdr->connid1 = ntohl(tcphdr->connid1);
-  tcphdr->connid2 = ntohs(tcphdr->connid2);
+  tcphdr->connid2 = ntohl(tcphdr->connid2);
   seqno = tcphdr->seqno = ntohl(tcphdr->seqno);
   ackno = tcphdr->ackno = ntohl(tcphdr->ackno);
   tcphdr->wnd = ntohs(tcphdr->wnd);
@@ -188,7 +190,7 @@ tcp_input(struct ip_addr_t remote_udp_ip, u16_t remote_udp_port, struct pbuf *p)
     LWIP_ASSERT("tcp_input: active pcb->state != TIME-WAIT", pcb->state != TIME_WAIT);
     LWIP_ASSERT("tcp_input: active pcb->state != LISTEN", pcb->state != LISTEN);
     if (pcb->conn_id.connid1 == tcphdr->connid1 &&
-        pcb->conn_id.connid2== tcphdr->connid2) {
+        (pcb->state == SYN_SENT ? 1 : pcb->conn_id.connid2 == tcphdr->connid2)) {
       /* Move this PCB to the front of the list so that subsequent
          lookups will be faster (we exploit locality in TCP segment
          arrivals). */
@@ -230,7 +232,7 @@ tcp_input(struct ip_addr_t remote_udp_ip, u16_t remote_udp_port, struct pbuf *p)
       //if (lpcb->local_port == remote_udp_port) {
             break;
       //}
-      prev = (struct tcp_pcb *)lpcb;
+      //prev = (struct tcp_pcb *)lpcb;
     }
     if (lpcb != NULL) {
       /* Move this PCB to the front of the list so that subsequent
@@ -514,7 +516,8 @@ tcp_listen_input(struct tcp_pcb_listen *pcb, const struct ip_addr_t *remote_udp_
     npcb->local_port = pcb->local_port;
     npcb->remote_port = remote_udp_port;
     npcb->remote_udp_port = remote_udp_port;
-    npcb->conn_id = *conn_id;
+    npcb->conn_id.connid1 = conn_id->connid1;
+    npcb->conn_id.connid2 = tcp_new_server_id();
     npcb->state = SYN_RCVD;
     npcb->rcv_nxt = seqno + 1;
     npcb->rcv_ann_right_edge = npcb->rcv_nxt;
@@ -672,6 +675,7 @@ tcp_process(struct tcp_pcb *pcb)
       pcb->snd_wnd_max = pcb->snd_wnd;
       pcb->snd_wl1 = seqno - 1; /* initialise to seqno - 1 to force window update */
       pcb->state = ESTABLISHED;
+      pcb->conn_id.connid2 = tcphdr->connid2;
 
 #if TCP_CALCULATE_EFF_SEND_MSS
       pcb->mss = tcp_eff_send_mss(pcb->mss, &pcb->local_ip, &pcb->remote_ip,
@@ -683,8 +687,8 @@ tcp_process(struct tcp_pcb *pcb)
 
       pcb->cwnd = LWIP_TCP_CALC_INITIAL_CWND(pcb->mss);
       LWIP_DEBUGF(TCP_CWND_DEBUG, ("tcp_process (SENT): cwnd %"TCPWNDSIZE_F
-                                   " ssthresh %"TCPWNDSIZE_F"\n",
-                                   pcb->cwnd, pcb->ssthresh));
+                                   " ssthresh %"TCPWNDSIZE_F", connid2:%u\n",
+                                   pcb->cwnd, pcb->ssthresh, pcb->conn_id.connid2));
       LWIP_ASSERT("pcb->snd_queuelen > 0", (pcb->snd_queuelen > 0));
       --pcb->snd_queuelen;
       LWIP_DEBUGF(TCP_QLEN_DEBUG, ("tcp_process: SYN-SENT --queuelen %"TCPWNDSIZE_F"\n", (tcpwnd_size_t)pcb->snd_queuelen));

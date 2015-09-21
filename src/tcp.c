@@ -91,6 +91,8 @@ const char * const tcp_state_str[] = {
 /* last local TCP port */
 static u16_t tcp_port = TCP_LOCAL_PORT_RANGE_START;
 
+static u32_t tcp_server_id = 9528;
+
 /* Incremented every coarse grained timer shot (typically every 500 ms). */
 u32_t tcp_ticks;
 const u8_t tcp_backoff[13] =
@@ -723,6 +725,25 @@ again:
     }
   }
   return tcp_port;
+}
+
+u32_t tcp_new_server_id(void) {
+    u8_t i;
+    struct tcp_pcb *pcb;
+
+again:
+    if (++tcp_server_id == 0) {
+        ++tcp_server_id;
+    }
+    /* Check all PCB lists. */
+    for (i = 0; i < NUM_TCP_PCB_LISTS; i++) {
+      for(pcb = *tcp_pcb_lists[i]; pcb != NULL; pcb = pcb->next) {
+        if (pcb->conn_id.connid2 == tcp_server_id) {
+          goto again;
+        }
+      }
+    }
+    return ++tcp_server_id;
 }
 
 /**
